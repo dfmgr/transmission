@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+
+SCRIPTNAME="$(basename $0)"
+SCRIPTDIR="$(dirname "${BASH_SOURCE[0]}")"
+USER="${SUDO_USER:-${USER}}"
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# @Author      : Jason
+# @Contact     : casjaysdev@casjay.net
+# @File        : trans-notify
+# @Created     : Wed, Feb 26, 2020, 00:00 EST
+# @License     : WTFPL
+# @Copyright   : Copyright (c) CasjaysDev
+# @Description : transmission notification script
+#
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+# Set functions
+
+SCRIPTSFUNCTURL="${SCRIPTSAPPFUNCTURL:-https://github.com/dfmgr/installer/raw/master/functions}"
+SCRIPTSFUNCTDIR="${SCRIPTSAPPFUNCTDIR:-/usr/local/share/CasjaysDev/scripts}"
+SCRIPTSFUNCTFILE="${SCRIPTSAPPFUNCTFILE:-applications.bash}"
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+if [ -f "../functions/$SCRIPTSFUNCTFILE" ]; then
+  . "../functions/$SCRIPTSFUNCTFILE"
+elif [ -f "$SCRIPTSFUNCTDIR/functions/$SCRIPTSFUNCTFILE" ]; then
+  . "$SCRIPTSFUNCTDIR/functions/$SCRIPTSFUNCTFILE"
+else
+  curl -LSs "$SCRIPTSFUNCTURL/$SCRIPTSFUNCTFILE" -o "/tmp/$SCRIPTSFUNCTFILE" || exit 1
+  . "/tmp/$SCRIPTSFUNCTFILE"
+fi
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+dldir="$(grep download-dir ~/.config/transmission/settings.json | sed 's#[,"]##g' | awk '{print $2}')"
+
+# Main progam
+
+if cmd_exists notify-send; then
+  notify-send --app-name=transmission-bt "$TR_TORRENT_NAME has been 🔽 to $dldir"
+fi
+
+if [ ! -z "$PUSHBULLET_ACCESS_TOKEN" ]; then
+  curl -LSsq -u ${PUSHBULLET_ACCESS_TOKEN}: \
+    --header 'Content-Type: application/json' \
+    -X POST https://api.pushbullet.com/v2/pushes \
+    -d "{\"type\": \"note\", \"title\": \"Torrent has 🔽 on $HOSTNAME\", \"body\": \"$TR_TORRENT_NAME has been downloaded to $dldir.\"}" \
+    >/dev/null && echo ""
+fi
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+# end
+
+# vi: set expandtab ts=4 fileencoding=utf-8 filetype=sh noai

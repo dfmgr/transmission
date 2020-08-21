@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+
+SCRIPTNAME="$(basename $0)"
+SCRIPTDIR="$(dirname "${BASH_SOURCE[0]}")"
+USER="${SUDO_USER:-${USER}}"
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# @Author      : Jason
+# @Contact     : casjaysdev@casjay.net
+# @File        : td-toggle
+# @Created     : Wed, Feb 26, 2020, 00:00 EST
+# @License     : WTFPL
+# @Copyright   : Copyright (c) CasjaysDev
+# @Description : If transmission-daemon is running, will ask to kill, else will ask to start.
+#
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+# Set functions
+
+SCRIPTSFUNCTURL="${SCRIPTSAPPFUNCTURL:-https://github.com/dfmgr/installer/raw/master/functions}"
+SCRIPTSFUNCTDIR="${SCRIPTSAPPFUNCTDIR:-/usr/local/share/CasjaysDev/scripts}"
+SCRIPTSFUNCTFILE="${SCRIPTSAPPFUNCTFILE:-applications.bash}"
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+if [ -f "../functions/$SCRIPTSFUNCTFILE" ]; then
+  . "../functions/$SCRIPTSFUNCTFILE"
+elif [ -f "$SCRIPTSFUNCTDIR/functions/$SCRIPTSFUNCTFILE" ]; then
+  . "$SCRIPTSFUNCTDIR/functions/$SCRIPTSFUNCTFILE"
+else
+  curl -LSs "$SCRIPTSFUNCTURL/$SCRIPTSFUNCTFILE" -o "/tmp/$SCRIPTSFUNCTFILE" || exit 1
+  . "/tmp/$SCRIPTSFUNCTFILE"
+fi
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+if ! ifinstalled transmission-remote-cli; then
+  exit 1
+fi
+
+if pgrep -x transmission-da >/dev/null; then
+  if [ "$(printf "No\\nYes" | dmenu -i -p "Kill transmission-daemon?")" = "Yes" ]; then
+    killall transmission-da &&
+      notify-send "transmission-daemon killed."
+  else
+    notify-send "User cancelled."
+  fi
+else
+  if [ "$(printf "No\\nYes" | dmenu -i -p "Start transmission daemon?")" = "Yes" ]; then
+    transmission-daemon &&
+      notify-send "tranmission-daemon started."
+  else
+    notify-send "User cancelled."
+  fi
+fi
+sleep 3
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+# end
+
+# vi: set expandtab ts=4 fileencoding=utf-8 filetype=sh noai
