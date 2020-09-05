@@ -181,12 +181,12 @@ failexitcode
 run_postinst() {
   dfmgr_run_post
   replace "$APPDIR/settings.json" "replacehome" "$HOME"
-  mkd "$Downloads/Torrents/Complete" "$HOME/Downloads/Torrents/InComplete"
-  mkd "$HOME/Downloads" "$CONF/transmission-remote-gtk" "$CONF/transmission-daemon"
-  [ -e $HOME/Downloads/Torrents ] || ln_sf "$SHARE/torrents" "$HOME/Downloads/Torrents"
-  ln_sf "$APPDIR/settings.json" "$CONF/transmission-daemon/settings.json"
-  ln_sf "$APPDIR/transmission-remote-gtk.json" "$CONF/transmission-remote-gtk/config.json"
-  system_service_disable transmission-daemon.service
+  mkd "$HOME/Downloads" "$HOME/.config/transmission-remote-gtk" "$HOME/.config/transmission-daemon"
+  mkd "$HOME/Downloads/Torrents/Complete" "$HOME/Downloads/Torrents/InComplete"
+  [ -e $HOME/Downloads/Torrents ] || ln_sf "$HOME/.local/share/torrents" "$HOME/Downloads/Torrents"
+  ln_sf "$APPDIR/settings.json" "$HOME/.config/transmission-daemon/settings.json"
+  ln_sf "$APPDIR/transmission-remote-gtk.json" "$HOME/.config/transmission-remote-gtk/config.json"
+  system_service_disable --now transmission-daemon.service
   if cmd_exists transmission-daemon; then
     transmission-daemon &
   fi
