@@ -183,7 +183,7 @@ run_postinst() {
   replace "$APPDIR/settings.json" "replacehome" "$HOME"
   mkd "$HOME/Downloads" "$HOME/.config/transmission-remote-gtk" "$HOME/.config/transmission-daemon"
   mkd "$HOME/Downloads/Torrents/Complete" "$HOME/Downloads/Torrents/InComplete"
-  [ -e $HOME/Downloads/Torrents ] || ln_sf "$HOME/.local/share/torrents" "$HOME/Downloads/Torrents"
+  ln_sf "$HOME/.local/share/torrents" "$HOME/Downloads/Torrents"
   ln_sf "$APPDIR/settings.json" "$HOME/.config/transmission-daemon/settings.json"
   ln_sf "$APPDIR/transmission-remote-gtk.json" "$HOME/.config/transmission-remote-gtk/config.json"
   system_service_disable --now transmission-daemon.service
