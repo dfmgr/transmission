@@ -94,7 +94,7 @@ show_optvars "$@"
 
 # end with a space
 
-APP="$APPNAME-cli transmission-remote-gtk transmission-daemon transmission-remote-cli "
+APP="$APPNAME-cli transmission-daemon "
 PERL=""
 PYTH=""
 PIPS=""
