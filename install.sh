@@ -143,12 +143,12 @@ devnull kill -9 "$(pidof transmission-remote-gtk)"
 
 if [ -d "$DOWNLOADED_TO/.git" ]; then
   execute \
-    "git_update $APPDIR" \
+    "git_update $DOWNLOADED_TO" \
     "Updating $APPNAME configurations"
 else
   execute \
     "backupapp && \
-        git_clone -q $REPO/$APPNAME $APPDIR" \
+        git_clone -q $REPO/$APPNAME $DOWNLOADED_TO" \
     "Installing $APPNAME configurations"
 fi
 
@@ -180,13 +180,13 @@ failexitcode
 
 run_postinst() {
   dfmgr_run_post
-  replace "$DOWNLOADED_TO/settings.json" "replacehome" "$HOME"
+  replace "$APPDIR/settings.json" "replacehome" "$HOME"
   mkd "$HOME/Downloads" "$HOME/.local/share/torrents/Complete" "$HOME/.local/share/torrents/InComplete"
-  ln_sf "$DOWNLOADED_TO" "$HOME/.config/transmission-remote-gtk"
-  ln_sf "$DOWNLOADED_TO" "$HOME/.config/transmission-daemon"
+  ln_sf "$APPDIR" "$HOME/.config/transmission-remote-gtk"
+  ln_sf "$APPDIR" "$HOME/.config/transmission-daemon"
   ln_sf "$HOME/.local/share/torrents" "$HOME/Downloads/Torrents"
-  ln_sf "$DOWNLOADED_TO/settings.json" "$HOME/.config/transmission-daemon/settings.json"
-  ln_sf "$DOWNLOADED_TO/transmission-remote-gtk.json" "$HOME/.config/transmission-remote-gtk/config.json"
+  ln_sf "$APPDIR/settings.json" "$HOME/.config/transmission-daemon/settings.json"
+  ln_sf "$APPDIR/transmission-remote-gtk.json" "$HOME/.config/transmission-remote-gtk/config.json"
   system_service_disable --now transmission-daemon.service
   if cmd_exists transmission-daemon; then
     transmission-daemon &
