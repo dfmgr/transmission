@@ -52,7 +52,7 @@ APPNAME="${APPNAME:-transmission}"
 APPDIR="${APPDIR:-$HOME/.config/$APPNAME}"
 REPO="${DFMGRREPO:-https://github.com/dfmgr}/${APPNAME}"
 REPORAW="${REPORAW:-$REPO/raw}"
-APPVERSION="$(curl -LSs $REPORAW/master/version.txt)"
+APPVERSION="$(__appversion)"
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -141,15 +141,15 @@ devnull kill -9 "$(pidof transmission-gt)"
 devnull kill -9 "$(pidof transmission-daemon)"
 devnull kill -9 "$(pidof transmission-remote-gtk)"
 
-if [ -d "$APPDIR/.git" ]; then
+if [ -d "$DOWNLOADED_TO/.git" ]; then
   execute \
-  "git_update $APPDIR" \
-  "Updating $APPNAME configurations"
+    "git_update $APPDIR" \
+    "Updating $APPNAME configurations"
 else
   execute \
-  "backupapp && \
+    "backupapp && \
         git_clone -q $REPO/$APPNAME $APPDIR" \
-  "Installing $APPNAME configurations"
+    "Installing $APPNAME configurations"
 fi
 
 # exit on fail
@@ -162,12 +162,12 @@ failexitcode
 if [ "$PLUGNAMES" != "" ]; then
   if [ -d "$PLUGDIR"/PLUREP/.git ]; then
     execute \
-    "git_update $PLUGDIR/PLUGREP" \
-    "Updating plugin PLUGNAME"
+      "git_update $PLUGDIR/PLUGREP" \
+      "Updating plugin PLUGNAME"
   else
     execute \
-    "git_clone PLUGINREPO $PLUGDIR/PLUGREP" \
-    "Installing plugin PLUGREP"
+      "git_clone PLUGINREPO $PLUGDIR/PLUGREP" \
+      "Installing plugin PLUGREP"
   fi
 fi
 
@@ -180,13 +180,13 @@ failexitcode
 
 run_postinst() {
   dfmgr_run_post
-  replace "$APPDIR/settings.json" "replacehome" "$HOME"
+  replace "$DOWNLOADED_TO/settings.json" "replacehome" "$HOME"
   mkd "$HOME/Downloads" "$HOME/.local/share/torrents/Complete" "$HOME/.local/share/torrents/InComplete"
-  ln_sf "$APPDIR" "$HOME/.config/transmission-remote-gtk" 
-  ln_sf "$APPDIR" "$HOME/.config/transmission-daemon"
+  ln_sf "$DOWNLOADED_TO" "$HOME/.config/transmission-remote-gtk"
+  ln_sf "$DOWNLOADED_TO" "$HOME/.config/transmission-daemon"
   ln_sf "$HOME/.local/share/torrents" "$HOME/Downloads/Torrents"
-  ln_sf "$APPDIR/settings.json" "$HOME/.config/transmission-daemon/settings.json"
-  ln_sf "$APPDIR/transmission-remote-gtk.json" "$HOME/.config/transmission-remote-gtk/config.json"
+  ln_sf "$DOWNLOADED_TO/settings.json" "$HOME/.config/transmission-daemon/settings.json"
+  ln_sf "$DOWNLOADED_TO/transmission-remote-gtk.json" "$HOME/.config/transmission-remote-gtk/config.json"
   system_service_disable --now transmission-daemon.service
   if cmd_exists transmission-daemon; then
     transmission-daemon &
@@ -197,8 +197,8 @@ run_postinst() {
 }
 
 execute \
-"run_postinst" \
-"Running post install scripts"
+  "run_postinst" \
+  "Running post install scripts"
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
