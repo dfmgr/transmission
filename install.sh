@@ -188,9 +188,9 @@ run_postinst() {
   dfmgr_run_post
   replace "$APPDIR/settings.json" "replacehome" "$HOME"
   mkd "$HOME/Downloads" "$HOME/.local/share/torrents/Complete" "$HOME/.local/share/torrents/InComplete"
+  ln_sf "$HOME/.local/share/torrents" "$HOME/Downloads/Torrents"
   ln_sf "$APPDIR" "$HOME/.config/transmission-remote-gtk"
   ln_sf "$APPDIR" "$HOME/.config/transmission-daemon"
-  ln_sf "$HOME/.local/share/torrents" "$HOME/Downloads/Torrents"
   ln_sf "$APPDIR/settings.json" "$HOME/.config/transmission-daemon/settings.json"
   ln_sf "$APPDIR/transmission-remote-gtk.json" "$HOME/.config/transmission-remote-gtk/config.json"
   #system_service_disable --now transmission-daemon.service
