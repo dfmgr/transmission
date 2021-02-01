@@ -40,7 +40,7 @@ fi
 
 if ! pgrep -x transmission-da >/dev/null; then
   transmission-daemon
-  notify-send "Starting torrent daemon..."
+  notifications "Transmission" "Starting torrent daemon..."
   sleep 3
 fi
 

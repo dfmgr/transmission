@@ -39,7 +39,7 @@ dldir="$(grep download-dir ~/.config/transmission/settings.json | sed 's#[,"]##g
 # Main progam
 
 if cmd_exists notify-send; then
-  notify-send --app-name=transmission-bt "$TR_TORRENT_NAME has been 🔽 to $dldir"
+  notifications "Transmission" "$TR_TORRENT_NAME has been 🔽 to $dldir"
 fi
 
 if [ ! -z "$PUSHBULLET_ACCESS_TOKEN" ]; then

@@ -35,35 +35,35 @@ fi
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 if [ "$1" = "" ]; then
-  notify-send "Error: " "No torrent file recieved"
+  notifications "Transmission" "Error: No torrent file recieved"
   exit 1
 fi
 
 if cmd_exists transmission-daemon; then
   if ! pgrep -x transmission-da >/dev/null >&1; then
     transmission-daemon &
-    notify-send "Starting transmission daemon..."
+    notifications "Transmission" "Starting transmission daemon..."
     sleep 3
   fi
   transmission-remote -a "$@"
   RETV="$?" && sleep 10
   if [ "$RETV" -eq 0 ]; then
-    notify-send "🔽 Torrent added."
+    notifications "Transmission" "🔽 Torrent added."
   else
-    notify-send "🔽 Torrent failed."
+    notifications "Transmission" "🔽 Torrent failed."
   fi
 elif cmd_exists transmission-gtk; then
   if ! pgrep -x transmission-gt >/dev/null >&1; then
     transmission-gtk &
-    notify-send "Starting transmission gui..."
+    notifications "Transmission" "Starting transmission gui..."
     sleep 3
   fi
   transmission-gtk "$@"
   RETV="$?" && sleep 10
   if [ "$RETV" -eq 0 ]; then
-    notify-send "🔽 Torrent added."
+    notifications "Transmission" "🔽 Torrent added."
   else
-    notify-send "🔽 Torrent failed."
+    notifications "Transmission" "🔽 Torrent failed."
   fi
 
 fi

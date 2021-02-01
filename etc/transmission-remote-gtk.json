@@ -1,49 +1,38 @@
 {
-  "profiles" : [
+  "profiles": [
     {
-      "profile-name" : "localhost",
-      "hostname" : "localhost",
-      "port" : 9091,
-      "rpc-url-path" : "/transmission/rpc",
-      "username" : "",
-      "password" : "",
-      "auto-connect" : true,
-      "ssl" : false,
-      "ssl-validate" : false,
-      "timeout" : 30,
-      "retries" : 999,
-      "update-active-only" : false,
-      "activeonly-fullsync-enabled" : false,
-      "activeonly-fullsync-every" : 2,
-      "update-interval" : 3,
-      "min-update-interval" : 3,
-      "session-update-interval" : 60,
-      "exec-commands" : [
-      ],
-      "destinations" : [
-      ]
+      "profile-name": "Default",
+      "hostname": "transmission_server",
+      "port": 9091,
+      "rpc-url-path": "/transmission/rpc",
+      "username": "",
+      "password": "",
+      "auto-connect": true,
+      "ssl": false,
+      "ssl-validate": false,
+      "timeout": 30,
+      "retries": 999,
+      "update-active-only": false,
+      "activeonly-fullsync-enabled": false,
+      "activeonly-fullsync-every": 2,
+      "update-interval": 3,
+      "min-update-interval": 3,
+      "session-update-interval": 60,
+      "exec-commands": [],
+      "destinations": []
     }
   ],
-  "profile-id" : 0,
-  "tree-views" : {
-    "TrgTorrentTreeView" : {
-      "sort-col" : -1,
-      "sort-type" : 0
+  "profile-id": 0,
+  "tree-views": {
+    "TrgTorrentTreeView": {
+      "sort-col": -1,
+      "sort-type": 0
     },
-    "TrgTrackersTreeView" : {
-      "sort-col" : -2,
-      "sort-type" : 0,
-      "widths" : [
-        76,
-        140,
-        84,
-        140,
-        148,
-        148,
-        132,
-        128
-      ],
-      "columns" : [
+    "TrgTrackersTreeView": {
+      "sort-col": -2,
+      "sort-type": 0,
+      "widths": [76, 140, 84, 140, 148, 148, 132, 128],
+      "columns": [
         "tier",
         "announce-url",
         "last-announce-peer-count",
@@ -54,38 +43,17 @@
         "scrape-url"
       ]
     },
-    "TrgFilesTreeView" : {
-      "sort-col" : -2,
-      "sort-type" : 0,
-      "widths" : [
-        180,
-        180,
-        212,
-        212,
-        212
-      ],
-      "columns" : [
-        "name",
-        "size",
-        "progress",
-        "wanted",
-        "priority"
-      ]
+    "TrgFilesTreeView": {
+      "sort-col": -2,
+      "sort-type": 0,
+      "widths": [180, 180, 212, 212, 212],
+      "columns": ["name", "size", "progress", "wanted", "priority"]
     },
-    "TrgPeersTreeView" : {
-      "sort-col" : -2,
-      "sort-type" : 0,
-      "widths" : [
-        90,
-        106,
-        130,
-        154,
-        138,
-        138,
-        114,
-        126
-      ],
-      "columns" : [
+    "TrgPeersTreeView": {
+      "sort-col": -2,
+      "sort-type": 0,
+      "widths": [90, 106, 130, 154, 138, 138, 114, 126],
+      "columns": [
         "ip",
         "host",
         "country",
@@ -97,20 +65,20 @@
       ]
     }
   },
-  "start-paused" : false,
-  "add-options-dialog" : true,
-  "delete-local-torrent" : false,
-  "show-state-selector" : true,
-  "filter-dirs" : true,
-  "filter-trackers" : true,
-  "directories-first" : true,
-  "show-notebook" : false,
-  "system-tray" : true,
-  "system-tray-minimise" : true,
-  "add-notify" : true,
-  "complete-notify" : true,
-  "window-height" : 557,
-  "window-width" : 1000,
-  "notebook-paned-pos" : 257,
-  "states-paned-pos" : 120
+  "start-paused": false,
+  "add-options-dialog": true,
+  "delete-local-torrent": false,
+  "show-state-selector": true,
+  "filter-dirs": true,
+  "filter-trackers": true,
+  "directories-first": true,
+  "show-notebook": false,
+  "system-tray": true,
+  "system-tray-minimise": true,
+  "add-notify": true,
+  "complete-notify": true,
+  "window-height": 557,
+  "window-width": 1000,
+  "notebook-paned-pos": 257,
+  "states-paned-pos": 120
 }
