@@ -24,12 +24,12 @@ SCRIPTSFUNCTFILE="${SCRIPTSAPPFUNCTFILE:-applications.bash}"
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 if [ -f "../functions/$SCRIPTSFUNCTFILE" ]; then
-    . "../functions/$SCRIPTSFUNCTFILE"
+  . "../functions/$SCRIPTSFUNCTFILE"
 elif [ -f "$SCRIPTSFUNCTDIR/functions/$SCRIPTSFUNCTFILE" ]; then
-    . "$SCRIPTSFUNCTDIR/functions/$SCRIPTSFUNCTFILE"
+  . "$SCRIPTSFUNCTDIR/functions/$SCRIPTSFUNCTFILE"
 else
-    curl -LSs "$SCRIPTSFUNCTURL/$SCRIPTSFUNCTFILE" -o "/tmp/$SCRIPTSFUNCTFILE" || exit 1
-    . "/tmp/$SCRIPTSFUNCTFILE"
+  curl -LSs "$SCRIPTSFUNCTURL/$SCRIPTSFUNCTFILE" -o "/tmp/$SCRIPTSFUNCTFILE" || exit 1
+  . "/tmp/$SCRIPTSFUNCTFILE"
 fi
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -37,15 +37,15 @@ fi
 BLOCK="${BLOCK_BUTTON:-$1}"
 
 status() {
-    transmission-remote -l | grep % |
-        sed " # This first sed command is to ensure a desirable order with sort
+  transmission-remote -l | grep % |
+    sed " # This first sed command is to ensure a desirable order with sort
   s/.*Stopped.*/A/g;
   s/.*Seeding.*/Z/g;
   s/.*100%.*/N/g;
   s/.*Idle.*/B/g;
   s/.*Uploading.*/L/g;
   s/.*%.*/M/g" |
-        sort -h | uniq -c | sed " # Now we replace the standin letters with icons.
+    sort -h | uniq -c | sed " # Now we replace the standin letters with icons.
         s/A/🛑/g;
         s/B/⌛️/g;
         s/L/🔼/g;

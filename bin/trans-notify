@@ -38,12 +38,12 @@ dldir="$(grep download-dir ~/.config/transmission/settings.json | sed 's#[,"]##g
 
 # Main progam
 
-if cmd_exists notify-send; then
+if cmd_exists notifications; then
   notifications "Transmission" "$TR_TORRENT_NAME has been 🔽 to $dldir"
 fi
 
-if [ ! -z "$PUSHBULLET_ACCESS_TOKEN" ]; then
-  curl -LSsq -u ${PUSHBULLET_ACCESS_TOKEN}: \
+if [ -n "$PUSHBULLET_ACCESS_TOKEN" ]; then
+  curl -LSsq -u "$PUSHBULLET_ACCESS_TOKEN": \
     --header 'Content-Type: application/json' \
     -X POST https://api.pushbullet.com/v2/pushes \
     -d "{\"type\": \"note\", \"title\": \"Torrent has 🔽 on $HOSTNAME\", \"body\": \"$TR_TORRENT_NAME has been downloaded to $dldir.\"}" \

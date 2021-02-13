@@ -34,23 +34,23 @@ fi
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-if ! ifinstalled transmission-remote-cli; then
+if ! ifinstalled transmission-remote || transmission-remote-cli; then
   exit 1
 fi
 
 if pgrep -x transmission-da >/dev/null; then
   if [ "$(printf "No\\nYes" | dmenu -i -p "Kill transmission-daemon?")" = "Yes" ]; then
     killall transmission-da &&
-      notify-send "transmission-daemon killed."
+      notifications "Torrents" "transmission-daemon killed."
   else
-    notify-send "User cancelled."
+    notifications "Torrents" "User cancelled."
   fi
 else
   if [ "$(printf "No\\nYes" | dmenu -i -p "Start transmission daemon?")" = "Yes" ]; then
     transmission-daemon &&
-      notify-send "tranmission-daemon started."
+      notifications "Torrents" "tranmission-daemon started."
   else
-    notify-send "User cancelled."
+    notifications "Torrents" "User cancelled."
   fi
 fi
 sleep 3
