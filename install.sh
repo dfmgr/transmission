@@ -148,9 +148,7 @@ run_postinst() {
   dfmgr_run_post
   mkd "$HOME/Downloads" "$HOME/Downloads/Complete" "$HOME/Downloads/InComplete"
   mkd "$HOME/.config/transmission-remote-gtk" "$HOME/.config/transmission-daemon"
-  if [ -n "$TRANSMISSION_SERVER" ]; then
-    replace "$APPDIR/transmission-remote-gtk.json" "transmission_server" "$TRANSMISSION_SERVER"
-  else replace "$APPDIR/transmission-remote-gtk.json" "transmission_server" "localhost"; fi
+  replace "$APPDIR/transmission-remote-gtk.json" "transmission_server" "${TRANSMISSION_SERVER:-localhost}"
   replace "$APPDIR/settings.json" "replacehome" "$HOME"
   ln_sf "$HOME/Downloads/Torrents" "$HOME/.local/share/torrents"
   ln_sf "$APPDIR/settings.json" "$HOME/.config/transmission-daemon/settings.json"
