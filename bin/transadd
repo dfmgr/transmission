@@ -44,13 +44,14 @@ main() {
     exit 1
   fi
   # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  local SERVER="${TORRENT_SERVER:-localhost}:9091"
   if [ -f "$(command -v transmission-daemon 2>/dev/null)" ]; then
     if ! pgrep -x transmission-da &>/dev/null; then
       transmission-daemon &
-        notifications "Transmission" "Starting transmission daemon..."
+      notifications "Transmission" "Starting transmission daemon..."
       sleep 3
     fi
-    transmission-remote -a "$@" &>/dev/null
+    transmission-remote "$SERVER" -a "$@" &>/dev/null
     exitCode="$?" && sleep 10
     if [ "$exitCode" -eq 0 ]; then
       notifications "Transmission" "🔽 Torrent added."
@@ -81,7 +82,7 @@ main() {
   else
     exitCode=1
   fi
-    return "${exitCode:-$?}"
+  return "${exitCode:-$?}"
 }
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # execute function
@@ -90,4 +91,3 @@ main "$@"
 exit $?
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # end
-

@@ -39,23 +39,24 @@ main() {
   # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   [ "$1" = "--help" ] && __help
   # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  local SERVER="${TORRENT_SERVER:-localhost}:9091"
   if [ -f "$(command -v transmission-remote)" ] || [ -f "$(command -v transmission-remote-cli)" ]; then
-  if pgrep -x transmission-da >/dev/null; then
-    if [ "$(printf "No\\nYes" | dmenu -i -p "Kill transmission-daemon?")" = "Yes" ]; then
-      killall transmission-da &&
-        notifications "Torrents" "transmission-daemon killed."
+    if pgrep -x transmission-da >/dev/null; then
+      if [ "$(printf "No\\nYes" | dmenu -i -p "Kill transmission-daemon?")" = "Yes" ]; then
+        killall transmission-da &&
+          notifications "Torrents" "transmission-daemon killed."
+      else
+        notifications "Torrents" "User cancelled."
+      fi
     else
-      notifications "Torrents" "User cancelled."
+      if [ "$(printf "No\\nYes" | dmenu -i -p "Start transmission daemon?")" = "Yes" ]; then
+        transmission-daemon "$SERVER" &&
+          notifications "Torrents" "tranmission-daemon started."
+      else
+        notifications "Torrents" "User cancelled."
+      fi
     fi
-  else
-    if [ "$(printf "No\\nYes" | dmenu -i -p "Start transmission daemon?")" = "Yes" ]; then
-      transmission-daemon &&
-        notifications "Torrents" "tranmission-daemon started."
-    else
-      notifications "Torrents" "User cancelled."
-    fi
-  fi
-  sleep 3
+    sleep 3
   else
     return 1
   fi

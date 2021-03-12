@@ -24,7 +24,7 @@ SRC_DIR="${BASH_SOURCE%/*}"
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # helper function
 __help() {
-  printf_help "Usage:  trans-status |  trans-status "
+  printf_help "Usage:  trans-status |  Show transmission status "
 }
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # Main function
@@ -57,10 +57,13 @@ main() {
         s/M/🔽/g;
         s/N/✅/g;
         s/Z/🌱/g" | awk '{print $2, $1}' | sed -e "s/ $//g" | tr '\n' ' '
-    }
+  }
   case $BLOCK in
-    1) myterminal -e mytorrent 2>/dev/null && exitCode=0 || exitCode=1;;
-    *) status 2>/dev/null && exitCode=0 || exitCode=1; echo ;;
+  1) myterminal -e mytorrent 2>/dev/null && exitCode=0 || exitCode=1 ;;
+  *)
+    status 2>/dev/null && exitCode=0 || exitCode=1
+    echo
+    ;;
   esac
   return ${exitCode:-$?}
 }
@@ -71,4 +74,3 @@ main "$@"
 exit $?
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # end
-

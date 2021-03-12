@@ -39,15 +39,19 @@ main() {
   # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   [ "$1" = "--help" ] && __help
   # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  local dldir="$(grep download-dir ~/.config/transmission/settings.json | sed 's#[,"]##g' | awk '{print $2}')"
-  notifications "Transmission" "$TR_TORRENT_NAME has been 🔽 to $dldir"
-  # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  if [ -n "$PUSHBULLET_ACCESS_TOKEN" ]; then
-    curl -LSsq -u "$PUSHBULLET_ACCESS_TOKEN": \
-      --header 'Content-Type: application/json' \
-      -X POST https://api.pushbullet.com/v2/pushes \
-      -d "{\"type\": \"note\", \"title\": \"Torrent has 🔽 on $HOSTNAME\", \"body\": \"$TR_TORRENT_NAME has been downloaded to $dldir.\"}" \
-      >/dev/null && echo ""
+  if [ -"$HOME/.config/transmission/settings.json" ]; then
+    local dldir="$(grep download-dir "$HOME/.config/transmission/settings.json" | sed 's#[,"]##g' | awk '{print $2}')"
+    notifications "Transmission" "$TR_TORRENT_NAME has been 🔽 to $dldir"
+    # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    if [ -n "$PUSHBULLET_ACCESS_TOKEN" ]; then
+      curl -LSsq -u "$PUSHBULLET_ACCESS_TOKEN": \
+        --header 'Content-Type: application/json' \
+        -X POST https://api.pushbullet.com/v2/pushes \
+        -d "{\"type\": \"note\", \"title\": \"Torrent has 🔽 on $HOSTNAME\", \"body\": \"$TR_TORRENT_NAME has been downloaded to $dldir.\"}" \
+        >/dev/null && echo ""
+    fi
+  else
+    exitCode=1
   fi
   return "${exitCode:-$?}"
 }
@@ -58,4 +62,3 @@ main "$@"
 exit $?
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # end
-

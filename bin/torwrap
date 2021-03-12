@@ -40,21 +40,21 @@ main() {
   [ "$1" = "--help" ] && __help
   # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   if [ -f "$(command -v transmission-remote)" ] || [ -f "$(command -v transmission-remote-cli)" ]; then
-  if ! pgrep -x transmission-da >/dev/null; then
-    transmission-daemon
-    exitCode+=$?
-    notifications "Transmission" "Starting torrent daemon..."
-    sleep 3
-  fi
-  # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  if [ -f  "$(command -v transmission-remote-cli)" ]; then
-    myterminal -e transmission-remote-cli
-    exitCode+=$?
-  fi
+    if ! pgrep -x transmission-da >/dev/null; then
+      transmission-daemon
+      exitCode+=$?
+      notifications "Transmission" "Starting torrent daemon..."
+      sleep 3
+    fi
+    # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    if [ -f "$(command -v transmission-remote-cli)" ]; then
+      myterminal -e transmission-remote-cli
+      exitCode+=$?
+    fi
   else
     exitCode=1
   fi
-    return "${exitCode:-$?}"
+  return "${exitCode:-$?}"
 }
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # execute function
