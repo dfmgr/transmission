@@ -1,53 +1,65 @@
 #!/usr/bin/env bash
-
-SCRIPTNAME="$(basename $0)"
-SCRIPTDIR="$(dirname "${BASH_SOURCE[0]}")"
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+APPNAME="torwrap"
 USER="${SUDO_USER:-${USER}}"
+HOME="${USER_HOME:-${HOME}}"
+SRC_DIR="${BASH_SOURCE%/*}"
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-# @Author      : Jason
-# @Contact     : casjaysdev@casjay.net
-# @File        : torwrap
-# @Created     : Wed, Feb 26, 2020, 00:00 EST
-# @License     : WTFPL
-# @Copyright   : Copyright (c) CasjaysDev
-# @Description : open transmission-remote.
-#
-# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-# Set functions
-
-SCRIPTSFUNCTURL="${SCRIPTSAPPFUNCTURL:-https://github.com/dfmgr/installer/raw/master/functions}"
-SCRIPTSFUNCTDIR="${SCRIPTSAPPFUNCTDIR:-/usr/local/share/CasjaysDev/scripts}"
-SCRIPTSFUNCTFILE="${SCRIPTSAPPFUNCTFILE:-applications.bash}"
+#set opts
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-if [ -f "../functions/$SCRIPTSFUNCTFILE" ]; then
-  . "../functions/$SCRIPTSFUNCTFILE"
-elif [ -f "$SCRIPTSFUNCTDIR/functions/$SCRIPTSFUNCTFILE" ]; then
-  . "$SCRIPTSFUNCTDIR/functions/$SCRIPTSFUNCTFILE"
-else
-  curl -LSs "$SCRIPTSFUNCTURL/$SCRIPTSFUNCTFILE" -o "/tmp/$SCRIPTSFUNCTFILE" || exit 1
-  . "/tmp/$SCRIPTSFUNCTFILE"
-fi
-
+##@Version       : 031120212048-git
+# @Author        : Jason Hempstead
+# @Contact       : jason@casjaysdev.com
+# @License       : WTFPL
+# @ReadME        : torwrap --help
+# @Copyright     : Copyright: (c) 2021 Jason Hempstead, CasjaysDev
+# @Created       : Thursday, Mar 11, 2021 20:48 EST
+# @File          : torwrap
+# @Description   : open transmission-remote.
+# @TODO          :
+# @Other         :
+# @Resource      :
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-if ! ifinstalled transmission-remote-cli && ! ifinstalled transmission-daemon; then
-  exit 1
-fi
-
-if ! pgrep -x transmission-da >/dev/null; then
-  transmission-daemon
-  notifications "Transmission" "Starting torrent daemon..."
-  sleep 3
-fi
-
-if cmd_exists transmission-remote-cli; then
-  myterminal -e transmission-remote-cli
-fi
-
+# helper function
+__help() {
+  printf_help "Usage:  torwrap |  torwrap "
+}
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
+# Main function
+main() {
+  [ -f "$SRC_DIR/functions.bash" ] && local DIR="$SRC_DIR" || local DIR="$HOME/.local/bin"
+  if [[ -f "$DIR/functions.bash" ]]; then
+    . "$DIR/functions.bash"
+  else
+    printf "\t\t\\033[0;31m%s \033[0m\n" "Couldn't source the functions file from $DIR"
+    return 1
+  fi
+  # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  [ "$1" = "--help" ] && __help
+  # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  if [ -f "$(command -v transmission-remote)" ] || [ -f "$(command -v transmission-remote-cli)" ]; then
+  if ! pgrep -x transmission-da >/dev/null; then
+    transmission-daemon
+    exitCode+=$?
+    notifications "Transmission" "Starting torrent daemon..."
+    sleep 3
+  fi
+  # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  if [ -f  "$(command -v transmission-remote-cli)" ]; then
+    myterminal -e transmission-remote-cli
+    exitCode+=$?
+  fi
+  else
+    exitCode=1
+  fi
+    return "${exitCode:-$?}"
+}
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# execute function
+main "$@"
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+exit $?
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # end
