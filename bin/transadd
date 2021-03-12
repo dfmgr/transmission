@@ -29,7 +29,7 @@ __help() {
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # Main function
 main() {
-  [ -f "$SRC_DIR/functions.bash" ] && local DIR="$SRC_DIR" || local DIR="$HOME/.local/bin"
+  if [ -f "$SRC_DIR/functions.bash" ]; then local DIR="$SRC_DIR"; else local DIR="$HOME/.local/bin"; fi
   if [[ -f "$DIR/functions.bash" ]]; then
     . "$DIR/functions.bash"
   else
