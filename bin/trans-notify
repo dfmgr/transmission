@@ -55,17 +55,19 @@ main() {
   # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   # begin main app
   local NAME="${TR_TORRENT_NAME:-A torrent}"
+  local ONLINE="$(__am_i_online || echo OFFLINE)"
   if [ -"$HOME/.config/transmission/settings.json1" ]; then
     local dldir="$(grep download-dir "$HOME/.config/transmission/settings.json" | sed 's#[,"]##g' | awk '{print $2}')"
     notifications "Transmission" "$NAME has been 🔽 to $dldir"
     # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if am_i_online; then
-    if [ -n "$PUSHBULLET_ACCESS_TOKEN" ]; then
+    if [ -z "$ONLINE" ] && [ -n "$PUSHBULLET_ACCESS_TOKEN" ]; then
       curl -q -LSs -u "$PUSHBULLET_ACCESS_TOKEN": \
         --header 'Content-Type: application/json' \
         -X POST https://api.pushbullet.com/v2/pushes \
         -d "{\"type\": \"note\", \"title\": \"Torrent has 🔽 on $HOSTNAME\", \"body\": \"$NAME has been downloaded to $dldir.\"}">/dev/null && echo ""
-    fi
+    else
+      false
+      #notifications "Transmission" "There was a problem with pushbullet"
     fi
   else
     notifications "Transmission" "Is transmission installed?"
