@@ -1,65 +1,87 @@
 #!/usr/bin/env bash
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-APPNAME="td-toggle"
+PROG="td-toggle"
 USER="${SUDO_USER:-${USER}}"
 HOME="${USER_HOME:-${HOME}}"
 SRC_DIR="${BASH_SOURCE%/*}"
-
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 #set opts
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-##@Version       : 031120212039-git
+##@Version       : 031520212024-git
 # @Author        : Jason Hempstead
 # @Contact       : jason@casjaysdev.com
 # @License       : WTFPL
 # @ReadME        : td-toggle --help
 # @Copyright     : Copyright: (c) 2021 Jason Hempstead, CasjaysDev
-# @Created       : Thursday, Mar 11, 2021 20:39 EST
+# @Created       : Monday, Mar 15, 2021 20:24 EDT
 # @File          : td-toggle
 # @Description   : If transmission-daemon is running, will ask to kill, else will ask to start.
 # @TODO          :
 # @Other         :
 # @Resource      :
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Main function file
+if [ -f "$SRC_DIR/functions.bash" ]; then
+  FUNCTIONS_DIR="$SRC_DIR"
+  . "$FUNCTIONS_DIR/functions.bash"
+elif [ -f "$HOME/.local/bin/functions.bash" ]; then
+  FUNCTIONS_DIR="$HOME/.local/bin"
+  . "$FUNCTIONS_DIR/functions.bash"
+else
+  printf "\t\t\033[0;31m%s \033[0m\n" "Couldn't source the functions file from $FUNCTIONS_DIR"
+  return 1
+fi
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # helper function
+__version() { app_version; }
 __help() {
-  printf_help "Usage:  td-toggle |  start/stop transmission daemon"
+  app_help "Usage: td-toggle  -  td-toggle --version"  \
+    "-v, --version          -  display version" \
+    "-h, --help             -  display help"
 }
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # Main function
 main() {
-  [ -f "$SRC_DIR/functions.bash" ] && local DIR="$SRC_DIR" || local DIR="$HOME/.local/bin"
-  if [[ -f "$DIR/functions.bash" ]]; then
-    . "$DIR/functions.bash"
-  else
-    printf "\t\t\\033[0;31m%s \033[0m\n" "Couldn't source the functions file from $DIR"
-    return 1
-  fi
   # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  [ "$1" = "--help" ] && __help
+  # options
+  case $1 in
+    -v | --version) __version ;;
+    -h | --help) __help ;;
+  esac
   # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  # Required app check
+  cmd_exists --error bash || exit 1
+  # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  export SEND_NOTIFY=no
+  # begin main app
   local SERVER="${TORRENT_SERVER:-localhost}:9091"
   if [ -f "$(command -v transmission-remote)" ] || [ -f "$(command -v transmission-remote-cli)" ]; then
     if pgrep -x transmission-da >/dev/null; then
-      if [ "$(printf "No\\nYes" | dmenu -i -p "Kill transmission-daemon?")" = "Yes" ]; then
+      if ask_confirm "Kill transmission-daemon?"; then
         killall transmission-da &&
           notifications "Torrents" "transmission-daemon killed."
       else
         notifications "Torrents" "User cancelled."
       fi
     else
-      if [ "$(printf "No\\nYes" | dmenu -i -p "Start transmission daemon?")" = "Yes" ]; then
-        transmission-daemon "$SERVER" &&
+      if ask_confirm "Start transmission daemon?"; then
+        transmission-daemon &&
           notifications "Torrents" "tranmission-daemon started."
       else
         notifications "Torrents" "User cancelled."
+        exitCode=1
       fi
     fi
     sleep 3
   else
-    return 1
+    if eval mytorrents; then
+      exitCode=0
+    else
+      exitCode=1
+    fi
   fi
+  return "${exitCode:-$?}"
 }
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # execute function
@@ -68,3 +90,4 @@ main "$@"
 exit $?
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # end
+
