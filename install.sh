@@ -149,11 +149,13 @@ fi
 # run post install scripts
 run_postinst() {
   dfmgr_run_post
-  mkd "$HOME/Downloads" "$HOME/Downloads/Complete" "$HOME/Downloads/InComplete"
+  mkd "$HOME/Downloads" "$HOME/Downloads/Torrents/Complete" "$HOME/Downloads/Torrents/InComplete"
   mkd "$HOME/.config/transmission-remote-gtk" "$HOME/.config/transmission-daemon"
   replace "$APPDIR/transmission-remote-gtk.json" "transmission_server" "${TRANSMISSION_SERVER:-localhost}"
   replace "$APPDIR/settings.json" "replacehome" "$HOME"
-  ln_sf "$HOME/Downloads/Torrents" "$HOME/.local/share/torrents"
+  if [ -d "$HOME/Downloads/Torrents" ] && [ ! -L "$HOME/.local/share/torrents" ]; then
+    ln_sf "$HOME/Downloads/Torrents" "$HOME/.local/share/torrents"
+  fi
   ln_sf "$APPDIR/settings.json" "$HOME/.config/transmission-daemon/settings.json"
   ln_sf "$APPDIR/transmission-remote-gtk.json" "$HOME/.config/transmission-remote-gtk/config.json"
   #system_service_disable --now transmission-daemon.service
