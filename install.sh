@@ -158,7 +158,7 @@ run_postinst() {
   fi
   ln_sf "$APPDIR/settings.json" "$HOME/.config/transmission-daemon/settings.json"
   ln_sf "$APPDIR/transmission-remote-gtk.json" "$HOME/.config/transmission-remote-gtk/config.json"
-  #system_service_disable --now transmission-daemon.service
+  sudoif && __system_service_disable transmission-daemon
   if cmd_exists transmission-daemon; then
     transmission-daemon &
     disown
