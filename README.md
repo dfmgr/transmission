@@ -5,7 +5,7 @@ Transmission is a cross-platform BitTorrent client
 Automatic install/update:
 
 ```shell
-bash -c "$(curl -LSs https://github.com/dfmgr/transmission/raw/master/install.sh)"
+bash -c "$(curl -LSs https://github.com/dfmgr/transmission/raw/main/install.sh)"
 ```
 
 Manual install:
