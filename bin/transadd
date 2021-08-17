@@ -36,6 +36,7 @@ fi
 # helper function
 __transmission-daemon() {
   transmission-daemon &
+  disown
 }
 __version() { app_version; }
 __help() {
@@ -64,7 +65,7 @@ main() {
   # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   #check_local "$1" || check_uri "$1" || notifications "Transmission" "Error: unknown torrent location"
   # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  local SERVER="${TORRENT_SERVER:-localhost}:${TORRENT_SERVER_POORT:-9091}"
+  local SERVER="${TORRENT_SERVER:-localhost}:${TORRENT_SERVER_PORT:-9091}"
   if [ -f "$(command -v transmission-daemon 2>/dev/null)" ]; then
     if ! pgrep -x transmission-da &>/dev/null; then
       __transmission-daemon
