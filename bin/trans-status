@@ -36,7 +36,7 @@ fi
 # helper function
 __version() { app_version; }
 __help() {
-  printf_help "Usage:  trans-status |  Show transmission status "  \
+  printf_help "Usage:  trans-status |  Show transmission status " \
     "-v, --version          -  display version" \
     "-h, --help             -  display help"
 }
@@ -46,8 +46,8 @@ main() {
   # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   # options
   case $1 in
-    -v | --version) __version ;;
-    -h | --help) __help ;;
+  -v | --version) __version ;;
+  -h | --help) __help ;;
   esac
   # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   # Required app check
@@ -89,4 +89,3 @@ main "$@"
 exit $?
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # end
-

@@ -41,7 +41,7 @@
   "peer-port-random-on-start": false,
   "peer-socket-tos": "default",
   "pex-enabled": true,
-  "pidfile": "replacehome/.local/share/torrents/run.pid",
+  "pidfile": "replacehome/.local/tmp/run.pid",
   "port-forwarding-enabled": false,
   "preallocation": 1,
   "prefetch-enabled": true,
