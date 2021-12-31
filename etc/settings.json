@@ -10,7 +10,7 @@
   "bind-address-ipv6": "::",
   "blocklist-enabled": true,
   "blocklist-updates-enabled": true,
-  "blocklist-url": "http://john.bitsurge.net/public/biglist.p2p.gz",
+  "blocklist-url": "https://raw.githubusercontent.com/casjay/public/main/biglist.p2p.gz",
   "cache-size-mb": 4,
   "compact-view": false,
   "dht-enabled": true,
