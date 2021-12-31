@@ -41,7 +41,7 @@
   "peer-port-random-on-start": false,
   "peer-socket-tos": "default",
   "pex-enabled": true,
-  "pidfile": "replacehome/.local/tmp/run.pid",
+  "pidfile": "replacehome/.local/tmp/transmission-daemon.pid",
   "port-forwarding-enabled": false,
   "preallocation": 1,
   "prefetch-enabled": true,
