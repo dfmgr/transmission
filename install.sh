@@ -122,7 +122,6 @@ fi
 devnull kill -9 "$(pidof transmission-gt)"
 devnull kill -9 "$(pidof transmission-daemon)"
 devnull kill -9 "$(pidof transmission-remote-gtk)"
-system_service_disable transmission-daemon
 if am_i_online; then
   if [ -d "$INSTDIR/.git" ]; then
     execute "git_update $INSTDIR" "Updating $APPNAME configurations"
@@ -153,16 +152,18 @@ run_postinst() {
   local transmissionConf=""
   local transmissionDownloads=""
   if sudoif; then
+    sudo systemctl disable --now transmission-daemon
     transmissionConf=$(sudo find /var/lib/transmission* -name 'settings.json' 2>/dev/null | grep 'transmission' | head -n1 | grep '^')
     transmissionDownloads=$(sudo grep -s 'download-dir' "$transmissionConf" 2>/dev/null | awk -F ':' '{print $2}' | sed 's|^ ||g' | sed 's|[",]||g' | grep '^')
     [[ -d "/mnt/shared/Torrents" ]] && transmissionDownloads="/mnt/shared/Torrents"
     [[ -n "$transmissionDownloads" ]] || transmissionDownloads="/mnt/shared/Torrents"
     if [[ -f "$transmissionConf" ]]; then
-      sudo cp -Rf "$APPDIR/settings.json" "$transmissionConf"
-      sudo sed -i 's|replacehome/Downloads|'$transmissionDownloads'|g' "$transmissionConf"
-      sudo sed -i 's|replacehome|'$HOME'|g' "$transmissionConf"
-      sudo mkdir -p "$transmissionDownloads"
-      sudo chmod -R 777 "$transmissionDownloads"
+      cp -Rf "$APPDIR/settings.json" "/tmp/settings.json"
+      sudo -HE mv -f "/tmp/settings.json" "$transmissionConf"
+      sudo -HE sed -i 's|replacehome/Downloads|'$transmissionDownloads'|g' "$transmissionConf"
+      sudo -HE sed -i 's|replacehome|'$HOME'|g' "$transmissionConf"
+      sudo -HE mkdir -p "$transmissionDownloads"
+      sudo -HE chmod -R 777 "$transmissionDownloads"
     fi
   fi
   mkd "$HOME/Downloads" "$HOME/Downloads/Torrents/Complete" "$HOME/Downloads/Torrents/InComplete"
