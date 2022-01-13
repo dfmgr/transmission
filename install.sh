@@ -152,6 +152,7 @@ run_postinst() {
   local transmissionConf=""
   local transmissionDownloads=""
   if sudoif; then
+    set -x
     sudo systemctl disable --now transmission-daemon
     transmissionConf=$(sudo find /var/lib/transmission* -name 'settings.json' 2>/dev/null | grep 'transmission' | head -n1 | grep '^')
     transmissionDownloads=$(sudo grep -s 'download-dir' "$transmissionConf" 2>/dev/null | awk -F ':' '{print $2}' | sed 's|^ ||g' | sed 's|[",]||g' | grep '^')
