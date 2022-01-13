@@ -155,6 +155,7 @@ run_postinst() {
   transmissionDownloads=$(sudo grep -s 'download-dir' "$transmissionConf" 2>/dev/null | awk -F ':' '{print $2}' | sed 's|^ ||g' | sed 's|[",]||g' | grep '^')
   [[ -d "/mnt/shared/Torrents" ]] && transmissionDownloads="/mnt/shared/Torrents"
   [[ -n "$transmissionDownloads" ]] || transmissionDownloads="/mnt/shared/Torrents"
+  unset -f transmission transmission-daemon
   sudo systemctl disable --now transmission-daemon
   if [[ -f "$transmissionConf" ]]; then
     cp -Rf "$APPDIR/settings.json" "/tmp/settings.json"
