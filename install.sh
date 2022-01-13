@@ -174,7 +174,7 @@ run_postinst() {
   ln_sf "$APPDIR/settings.json" "$HOME/.config/transmission-daemon/settings.json"
   ln_sf "$APPDIR/transmission-remote-gtk.json" "$HOME/.config/transmission-remote-gtk/config.json"
   if cmd_exists transmission-daemon; then
-    transmission-daemon 2>/devnull &
+    transmission-daemon &>/dev/null &
     disown
     sleep 3
     cmd_exists transmission-remote-gtk && transmission-remote-gtk -m &>/dev/null &
