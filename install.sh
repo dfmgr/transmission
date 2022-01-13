@@ -122,6 +122,7 @@ fi
 devnull kill -9 "$(pidof transmission-gt)"
 devnull kill -9 "$(pidof transmission-daemon)"
 devnull kill -9 "$(pidof transmission-remote-gtk)"
+system_service_disable transmission-daemon
 if am_i_online; then
   if [ -d "$INSTDIR/.git" ]; then
     execute "git_update $INSTDIR" "Updating $APPNAME configurations"
@@ -152,15 +153,14 @@ run_postinst() {
   local transmissionConf=""
   local transmissionDownloads=""
   if sudoif; then
-    transmissionConf="$(sudo find /var/lib/transmission* -name 'settings.json' | grep 'transmission')"
-    transmissionDownloads="$(sudo cat "$transmissionConf" | grep 'download-dir' | awk -F ':' '{print $2}' | sed 's|[",]||g' | grep '')"
+    transmissionConf="$(sudo find /var/lib/transmission* -name 'settings.json' 2>/dev/null | grep 'transmission' | head -n1 | grep '^')"
+    transmissionDownloads="$(sudo grep -s 'download-dir' "$transmissionConf" 2>/dev/null | awk -F ':' '{print $2}' | sed 's|[",]||g' | grep '^')"
     [[ -d "/mnt/shared/Torrents" ]] && transmissionDownloads="/mnt/shared/Torrents"
     [[ -n "$transmissionDownloads" ]] || transmissionDownloads="/mnt/shared/Torrents"
     if [[ -f "$transmissionConf" ]]; then
-      system_service_disable transmission-daemon
       sudo cp -Rf "$APPDIR/settings.json" "$transmissionConf"
-      sudo sed -i "s|replacehome/Downloads|$transmissionDownloads|g" "$transmissionConf"
-      sudo sed -i "s|replacehome|$HOME|g" "$transmissionConf"
+      sudo sed -i 's|replacehome/Downloads|'$transmissionDownloads'|g' "$transmissionConf"
+      sudo sed -i 's|replacehome|'$HOME'|g' "$transmissionConf"
       sudo mkdir -p "$transmissionDownloads"
       sudo chmod -R 777 "$transmissionDownloads"
     fi
@@ -175,11 +175,11 @@ run_postinst() {
   ln_sf "$APPDIR/settings.json" "$HOME/.config/transmission-daemon/settings.json"
   ln_sf "$APPDIR/transmission-remote-gtk.json" "$HOME/.config/transmission-remote-gtk/config.json"
   if cmd_exists transmission-daemon; then
-    transmission-daemon &
+    transmission-daemon &>/devnull &
     disown
     cmd_exists transmission-remote-gtk && transmission-remote-gtk -m &>/dev/null &
     disown
-  elif [ -n "$DESKTOP_SESSION" ] && netstatg transmission | grep -q 9091; then
+  elif [ -n "$DESKTOP_SESSION" ] && netstatg transmiss | grep -q 9091; then
     mybrowser http://${HOSTNAME:-localhost}:9091 &
   elif cmd_exists transmission-gtk; then
     if [ -n "$DESKTOP_SESSION" ]; then
