@@ -71,7 +71,7 @@ show_optvars "$@"
 #installer_noupdate "$@"
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # Requires root - no point in continuing
-#sudoreq  # sudo required
+sudoreq # sudo required
 #sudorun  # sudo optional
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # initialize the installer
@@ -157,6 +157,7 @@ run_postinst() {
     [[ -d "/mnt/shared/Torrents" ]] && transmissionDownloads="/mnt/shared/Torrents"
     [[ -n "$transmissionDownloads" ]] || transmissionDownloads="/mnt/shared/Torrents"
     if [[ -f "$transmissionConf" ]]; then
+      system_service_disable transmission-daemon
       sudo cp -Rf "$APPDIR/settings.json" "$transmissionConf"
       sudo sed -i "s|replacehome/Downloads|$transmissionDownloads|g" "$transmissionConf"
       sudo sed -i "s|replacehome|$HOME|g" "$transmissionConf"
@@ -173,14 +174,13 @@ run_postinst() {
   fi
   ln_sf "$APPDIR/settings.json" "$HOME/.config/transmission-daemon/settings.json"
   ln_sf "$APPDIR/transmission-remote-gtk.json" "$HOME/.config/transmission-remote-gtk/config.json"
-  sudoif && __system_service_disable transmission-daemon
   if cmd_exists transmission-daemon; then
     transmission-daemon &
     disown
     cmd_exists transmission-remote-gtk && transmission-remote-gtk -m &>/dev/null &
     disown
   elif [ -n "$DESKTOP_SESSION" ] && netstatg transmission | grep -q 9091; then
-    mybrowser http://localhost:9091 &
+    mybrowser http://${HOSTNAME:-localhost}:9091 &
   elif cmd_exists transmission-gtk; then
     if [ -n "$DESKTOP_SESSION" ]; then
       transmission-gtk -m &>/dev/null &
