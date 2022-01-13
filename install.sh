@@ -149,6 +149,21 @@ fi
 # run post install scripts
 run_postinst() {
   dfmgr_run_post
+  local transmissionConf=""
+  local transmissionDownloads=""
+  if sudoif; then
+    transmissionConf="$(sudo find /var/lib/transmission* -name 'settings.json' | grep 'transmission')"
+    transmissionDownloads="$(sudo cat "$transmissionConf" | grep 'download-dir' | awk -F ':' '{print $2}' | sed 's|[",]||g' | grep '')"
+    [[ -d "/mnt/shared/Torrents" ]] && transmissionDownloads="/mnt/shared/Torrents"
+    [[ -n "$transmissionDownloads" ]] || transmissionDownloads="/mnt/shared/Torrents"
+    if [[ -f "$transmissionConf" ]]; then
+      sudo cp -Rf "$APPDIR/settings.json" "$transmissionConf"
+      sudo sed -i "s|replacehome/Downloads|$transmissionDownloads|g" "$transmissionConf"
+      sudo sed -i "s|replacehome|$HOME|g" "$transmissionConf"
+      sudo mkdir -p "$transmissionDownloads"
+      sudo chmod -R 777 "$transmissionDownloads"
+    fi
+  fi
   mkd "$HOME/Downloads" "$HOME/Downloads/Torrents/Complete" "$HOME/Downloads/Torrents/InComplete"
   mkd "$HOME/.config/transmission-remote-gtk" "$HOME/.config/transmission-daemon"
   replace "$APPDIR/transmission-remote-gtk.json" "transmission_server" "${TRANSMISSION_SERVER:-localhost}"
