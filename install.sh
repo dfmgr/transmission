@@ -174,8 +174,9 @@ run_postinst() {
   ln_sf "$APPDIR/settings.json" "$HOME/.config/transmission-daemon/settings.json"
   ln_sf "$APPDIR/transmission-remote-gtk.json" "$HOME/.config/transmission-remote-gtk/config.json"
   if cmd_exists transmission-daemon; then
-    transmission-daemon &>/devnull &
+    transmission-daemon 2>/devnull &
     disown
+    sleep 3
     cmd_exists transmission-remote-gtk && transmission-remote-gtk -m &>/dev/null &
     disown
   elif [ -n "$DESKTOP_SESSION" ] && netstatg transmiss | grep -q 9091; then
