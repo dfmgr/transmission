@@ -151,7 +151,7 @@ run_postinst() {
   dfmgr_run_post
   local transmissionConf=""
   local transmissionDownloads=""
-  transmissionConf=$(sudo find /var/lib/transmission* -name 'settings.json' 2>/dev/null | grep 'transmission' | head -n1 | grep '^')
+  transmissionConf=$(sudo find /var/lib/ -name 'settings.json' 2>/dev/null | grep 'transmission' | head -n1 | grep '^')
   transmissionDownloads=$(sudo grep -s 'download-dir' "$transmissionConf" 2>/dev/null | awk -F ':' '{print $2}' | sed 's|^ ||g' | sed 's|[",]||g' | grep '^')
   [[ -d "/mnt/shared/Torrents" ]] && transmissionDownloads="/mnt/shared/Torrents"
   [[ -n "$transmissionDownloads" ]] || transmissionDownloads="/mnt/shared/Torrents"
@@ -159,9 +159,9 @@ run_postinst() {
   sudo systemctl disable --now transmission-daemon
   if [[ -f "$transmissionConf" ]]; then
     cp -Rf "$APPDIR/settings.json" "/tmp/settings.json"
+    sed -i 's|replacehome/Downloads|'$transmissionDownloads'|g' "/tmp/settings.json"
+    sed -i 's|replacehome|'$HOME'|g' "/tmp/settings.json"
     sudo -HE mv -f "/tmp/settings.json" "$transmissionConf"
-    sudo -HE sed -i 's|replacehome/Downloads|'$transmissionDownloads'|g' "$transmissionConf"
-    sudo -HE sed -i 's|replacehome|'$HOME'|g' "$transmissionConf"
     sudo -HE mkdir -p "$transmissionDownloads"
     sudo -HE chmod -R 777 "$transmissionDownloads"
   fi
