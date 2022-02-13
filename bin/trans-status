@@ -56,28 +56,51 @@ main() {
   # begin main app
   local BLOCK="${BLOCK_BUTTON:-$1}"
   local SERVER="${TORRENT_SERVER:-localhost:9091}"
-  status() {
-    transmission-remote "$SERVER" -l | grep % |
-      sed " # This first sed command is to ensure a desirable order with sort
+  __status() {
+    local status idle percent
+    status="$(transmission-remote "$SERVER" -l 2>/dev/null | grep -Ev ' ID |Sum:' || return 1)"
+    idle="$(echo "$status" | grep 'Idle' || return 1)"
+    percent="$(echo "$status" | grep '%' || return 1)"
+    if [ -n "$idle" ] || [[ -n "$percent" ]]; then
+      printf '%s%s' "$percent" "$idle" |
+        sed " # This first sed command is to ensure a desirable order with sort
       s/.*Stopped.*/A/g;
       s/.*Seeding.*/Z/g;
       s/.*100%.*/N/g;
       s/.*Idle.*/B/g;
       s/.*Uploading.*/L/g;
       s/.*%.*/M/g" |
-      sort -h | uniq -c | sed " # Now we replace the standin letters with icons.
+        sort -h | uniq -c | sed " # Now we replace the standin letters with icons.
         s/A/🛑/g;
         s/B/⌛️/g;
         s/L/🔼/g;
         s/M/🔽/g;
         s/N/✅/g;
         s/Z/🌱/g" | awk '{print $2, $1}' | sed -e "s/ $//g" | tr '\n' ' '
+    fi
+    [ -n "$idle" ] || [ -n "$percent" ] || printf "🛑"
   }
   case $BLOCK in
-  1) myterminal -e mytorrent 2>/dev/null && exitCode=0 || exitCode=1 ;;
+  1)
+    myterminal -e mytorrent 2>/dev/null && exitCode=0 || exitCode=1
+    ;;
+  list)
+    resp="$(transmission-remote "$SERVER" -l 2>/dev/null | grep -Ev ' ID |Sum:' || return 1)"
+    if [[ -n "$resp" ]]; then
+      echo "$resp" | sed 's|^     ||g'
+    else
+      return 1
+    fi
+    ;;
   *)
-    status 2>/dev/null && exitCode=0 || exitCode=1
-    echo
+    resp="$(__status 2>/dev/null)"
+    if [[ -z "$resp" ]]; then
+      echo '😥'
+      exitCode=1
+    else
+      printf '%s\n' "$resp"
+      exitCode=0
+    fi
     ;;
   esac
   return ${exitCode:-$?}
