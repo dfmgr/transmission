@@ -271,8 +271,8 @@ EOF
   init
   # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   # begin main app
-  case $1 in
-  download)
+  case "$1" in
+  download | update)
     [ -d "./download" ] && rm -Rf ./download/* || mkdir -p "./download"
     get_free_urls=$(print_results | grep 'yes' | awk '{print $3}' | grep 'http')
     for free_url in $get_free_urls; do
