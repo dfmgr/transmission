@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # shellcheck shell=bash
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-##@Version           :  202304251442-git
+##@Version           :  202304261048-git
 # @@Author           :  Jason Hempstead
 # @@Contact          :  jason@casjaysdev.com
-# @@License          :  WTFPL
+# @@License          :  LICENSE.md
 # @@ReadME           :  install.sh --help
 # @@Copyright        :  Copyright: (c) 2023 Jason Hempstead, Casjays Developments
-# @@Created          :  Tuesday, Apr 25, 2023 14:42 EDT
+# @@Created          :  Saturday, Apr 29, 2023 01:00 EDT
 # @@File             :  install.sh
 # @@Description      :  Install configurations for transmission
 # @@Changelog        :  New script
@@ -25,7 +25,7 @@
 # shellcheck disable=SC2199
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 APPNAME="transmission"
-VERSION="202304251442-git"
+VERSION="202304261048-git"
 HOME="${USER_HOME:-$HOME}"
 USER="${SUDO_USER:-$USER}"
 RUN_USER="${SUDO_USER:-$USER}"
@@ -48,13 +48,14 @@ trap 'retVal=$?;trap_exit' ERR EXIT SIGINT
 set -o pipefail
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 for app in curl wget git; do type -P "$app" >/dev/null 2>&1 || missing_app+=("$app"); done && [ -z "${missing_app[*]}" ] || { printf '%s\n' "${missing_app[*]}" && exit 1; }
+connect_test() { curl -q -ILSsf --retry 1 -m 1 "https://1.1.1.1" | grep -iq 'server:*.cloudflare' || return 1; }
+verify_url() { urlcheck "$1" &>/dev/null || { printf_red "😿 The URL $1 returned an error. 😿" && exit 1; }; }
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # Import functions
 CASJAYSDEVDIR="${CASJAYSDEVDIR:-/usr/local/share/CasjaysDev/scripts}"
 SCRIPTSFUNCTDIR="${CASJAYSDEVDIR:-/usr/local/share/CasjaysDev/scripts}/functions"
 SCRIPTSFUNCTFILE="${SCRIPTSAPPFUNCTFILE:-mgr-installers.bash}"
 SCRIPTSFUNCTURL="${SCRIPTSAPPFUNCTURL:-https://github.com/dfmgr/installer/raw/main/functions}"
-connect_test() { curl -q -ILSsf --retry 1 -m 1 "https://1.1.1.1" | grep -iq 'server:*.cloudflare' || return 1; }
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 if [ -f "$PWD/$SCRIPTSFUNCTFILE" ]; then
   . "$PWD/$SCRIPTSFUNCTFILE"
@@ -69,7 +70,41 @@ else
 fi
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # Define custom functions
-__download_file() { curl -q -LSsf "$1" -o "$2" || return 1; }
+__am_i_online() { connect_test || return 1; }
+__run_git_clone_pull() { git_update "$1" "$2"; }
+__cmd_exists() { builtin type -P $1 &>/dev/null; }
+__mkdir() { mkdir -p "$1" &>/dev/null || return 1; }
+__app_is_running() { pidof "$1" &>/dev/null || return 1; }
+__mv_f() { [ -e "$1" ] && mv -f "$@" &>/dev/null || return 1; }
+__cp_rf() { [ -e "$1" ] && cp -Rfa "$@" &>/dev/null || return 1; }
+__chmod() { [ -e "$2" ] && chmod -Rf "$@" 2>/dev/null || return 1; }
+__replace_one() { $sed -i "s|$1|$2|g" "$3" &>/dev/null || return 1; }
+__rm_rf() { [ -e "$1" ] && { rm -Rf "$@" &>/dev/null || return 1; } || true; }
+__rm_link() { [ -e "$1" ] && { rm -rf "$1" &>/dev/null || return 1; } || true; }
+__download_file() { curl -q -LSsf "$1" -o "$2" 2>/dev/null || return 1; }
+__input_is_number() { test -n "$1" && test -z "${1//[0-9]/}" || return 1; }
+__failexitcode() { [ $1 -ne 0 ] && printf_red "😠 $2 😠" && exit ${1:-4}; }
+__get_exit_status() { s=$? && getRunStatus=$((s + ${getRunStatus:-0})) && return $s; }
+__service_is_running() { systemctl is-active $1 2>&1 | grep -qiw 'active' || return 1; }
+__service_is_active() { systemctl is-enabled $1 2>&1 | grep -qiw 'enabled' || return 1; }
+__get_version() { echo "$@" | awk -F '.' '{ printf("%d%03d%03d%03d\n", $1,$2,$3,$4) }'; }
+__silent_start() { __cmd_exists $1 && (eval "$*" &>/dev/null &) && __app_is_running $1 || return 1; }
+__symlink() { { __rm_rf "$2" || true; } && ln_sf "$1" "$2" &>/dev/null || { [ -L "$2" ] || return 1; }; }
+__get_pid() { ps -aux | grep -v ' grep ' | grep "$1" | awk -F ' ' '{print $2}' | grep ${2:-[0-9]} || return 1; }
+__dir_count() { find -L "${1:-./}" -maxdepth "${2:-1}" -not -path "${1:-./}/.git/*" -type d 2>/dev/null | wc -l; }
+__file_count() { find -L "${1:-./}" -maxdepth "${2:-1}" -not -path "${1:-./}/.git/*" -type f 2>/dev/null | wc -l; }
+__kill_process_id() { __input_is_number $1 && pid=$1 && { [ -z "$pid" ] || kill -15 $pid &>/dev/null; } || return 1; }
+__kill() { __kill_process_id "$1" || __kill_process_name "$1" || { ! __app_is_running "$1" && return 0; } || return 1; }
+__replace_all() { [ -n "$3" ] && [ -e "$3" ] && find "$3" -not -path "$3/.git/*" -type f -exec $sed -i "s|$1|$2|g" {} \; >/dev/null 2>&1 || return 1; }
+__kill_process_name() { local pid="$(pidof "$1" 2>/dev/null)" && { [ -z "$pid" ] || kill -19 $pid &>/dev/null || kill -9 $pid &>/dev/null; } || return 1; }
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+sed="$(builtin type -P gsed 2>/dev/null || builtin type -P sed 2>/dev/null || return)"
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Script options IE: --help --version
+show_optvars "$@"
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Verify repository exists
+verify_url "$REPO"
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # OS Support: supported_os unsupported_oses
 supported_os linux mac windows
@@ -87,9 +122,6 @@ scripts_check
 # Call the main function
 dfmgr_install
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-# Script options IE: --help --version
-show_optvars "$@"
-# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # trap the cleanup function
 trap_exit
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -101,15 +133,34 @@ dfmgr_run_init
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # Defaults
 APPNAME="transmission"
-BUILD_APPNAME="transmission"
 APPVERSION="$(__appversion "https://github.com/$SCRIPTS_PREFIX/$APPNAME/raw/$REPO_BRANCH/version.txt")"
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Define these if build script is used
+BUILD_APPNAME="transmission"
+BUILD_SCRIPT_REBUILD="false"
+BUILD_SRC_URL=""
+BUILD_SCRIPT_SRC_DIR="$PLUGIN_DIR/source"
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # Setup plugins
 PLUGIN_REPOS=""
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-# Specify required system packages you can prefix os to OS_PACKAGES: MAC_OS_PACKAGES WIN_OS_PACKAGES
-OS_PACKAGES="transmission transmission-cli transmission-daemon"
-OS_PACKAGES+=""
+# Grab release from github releases
+LATEST_RELEASE=""
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Specify global packages
+GLOBAL_OS_PACKAGES=""
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Define linux only packages
+LINUX_OS_PACKAGES="transmission transmission-cli transmission-daemon"
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Define MacOS only packages
+MAC_OS_PACKAGES="transmission-cli"
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Define Windows only packages
+WIN_OS_PACKAGES=""
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Specify ARCH_USER_REPO Pacakges
+AUR_PACKAGES=""
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # Define required system python packages
 PYTHON_PACKAGES=""
@@ -124,25 +175,30 @@ RUBY_GEMS=""
 PYTHON_PIP=""
 PHP_COMPOSER=""
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-# Specify ARCH_USER_REPO Pacakges
-AUR_PACKAGES=""
+# Show a custom message after install
+__run_post_message() {
+  true
+}
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # Define pre-install scripts
 __run_pre_install() {
-  devnull kill -9 "$(pidof transmission-gt)"
-  devnull kill -9 "$(pidof transmission-daemon)"
-  devnull kill -9 "$(pidof transmission-remote-gtk)"
-  return ${?:-0}
+  local getRunStatus=0
+  __kill transmission-gt
+  __kill transmission-daemon
+  __kill transmission-remote-gtk
+  return $getRunStatus
 }
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # run before primary post install function
 __run_prepost_install() {
+  local getRunStatus=0
 
-  return ${?:-0}
+  return $getRunStatus
 }
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # run after primary post install function
 __run_post_install() {
+  local getRunStatus=0
   local transmissionConf=""
   local transmissionDownloads="$HOME/Downloads/Torrents"
   transmissionConf=$(sudo find /var/lib/ -name 'settings.json' 2>/dev/null | grep 'transmission' | head -n1 | grep '^')
@@ -153,46 +209,57 @@ __run_post_install() {
     transmissionDownloads="$HOME/Downloads/Torrents"
   fi
   unset -f transmission transmission-daemon
-  sudo systemctl disable --now transmission-daemon
-  mkd "$HOME/.config/transmission-remote-gtk" "$HOME/.config/transmission-daemon"
-  mkd "$HOME/Downloads" "$transmissionDownloads/Complete" "$transmissionDownloads/InComplete"
+  __service_is_active && sudo systemctl disable --now transmission-daemon
+  __mkdir "$HOME/.config/transmission-remote-gtk" "$HOME/.config/transmission-daemon"
+  __mkdir "$HOME/Downloads" "$transmissionDownloads/Complete" "$transmissionDownloads/InComplete"
   if [ -f "$transmissionConf" ]; then
-    cp -Rf "$APPDIR/settings.json" "/tmp/settings.json"
-    sed -i 's|replacehome/Downloads|'$transmissionDownloads'|g' "/tmp/settings.json"
-    sed -i 's|replacehome|'$HOME'|g' "/tmp/settings.json"
-    sudo -HE mv -f "/tmp/settings.json" "$transmissionConf"
-    sudo -HE mkdir -p "$transmissionDownloads"
-    sudo -HE chmod -R 777 "$transmissionDownloads"
-  fi
-  replace "$APPDIR/settings.json" "replacehome" "$HOME"
-  replace "$APPDIR/transmission-remote-gtk.json" "transmission_server" "${TRANSMISSION_SERVER:-localhost}"
-  if [ -d "$transmissionDownloads" ] && [ ! -L "$HOME/.local/share/torrents" ]; then
-    ln_sf "$transmissionDownloads" "$HOME/.local/share/torrents"
-  fi
-  ln_sf "$APPDIR/settings.json" "$HOME/.config/transmission-daemon/settings.json"
-  ln_sf "$APPDIR/transmission-remote-gtk.json" "$HOME/.config/transmission-remote-gtk/config.json"
-  if cmd_exists transmission-daemon; then
-    transmission-daemon &>/dev/null &
-    disown
-    sleep 3
-    disown
-  elif [ -n "$DESKTOP_SESSION" ] && netstatg transmiss | grep -q 9091; then
-    cmd_exists transmission-remote-gtk && transmission-remote-gtk -m &>/dev/null &
-    #mybrowser http://${HOSTNAME:-localhost}:9091 &
-  elif cmd_exists transmission-gtk; then
-    if [ -n "$DESKTOP_SESSION" ]; then
-      transmission-gtk -m &>/dev/null &
-      disown
+    __cp_rf "$APPDIR/settings.json" "/tmp/settings.json"
+    __replace_one "replacehome/Downloads" "$transmissionDownloads" "/tmp/settings.json"
+    __replace_one "replacehome" "$HOME" "/tmp/settings.json"
+    if echo "$transmissionConf" | grep -q '/var/lib'; then
+      sudo -HE mv -f "/tmp/settings.json" "$transmissionConf"
+    fi
+    if [ "$transmissionDownloads" = "/mnt/shared/Torrents" ]; then
+      sudo -HE mkdir -p "$transmissionDownloads"
+      sudo -HE chmod -R 777 "$transmissionDownloads"
     fi
   fi
-  return ${?:-0}
+  __replace_one "replacehome" "$HOME" "$APPDIR/settings.json"
+  __replace_one "transmission_server" "${TRANSMISSION_SERVER:-localhost}" "$APPDIR/transmission-remote-gtk.json"
+  if [ "$transmissionDownloads" != "$HOME/.local/share/torrents" ] && [ -d "$transmissionDownloads" ]; then
+    [ -L "$HOME/.local/share/torrents" ] || __symlink "$transmissionDownloads" "$HOME/.local/share/torrents"
+  fi
+  __symlink "$APPDIR/settings.json" "$HOME/.config/transmission-daemon/settings.json"
+  __symlink "$APPDIR/transmission-remote-gtk.json" "$HOME/.config/transmission-remote-gtk/config.json"
+  if __cmd_exists transmission-daemon; then
+    __silent_start transmission-daemon
+  elif [ -n "$DESKTOP_SESSION" ] && netstatg transmiss | grep -q 9091; then
+    __cmd_exists transmission-remote-gtk && __silent_start transmission-remote-gtk -m
+    #mybrowser http://${HOSTNAME:-localhost}:9091 &
+  elif __cmd_exists transmission-gtk; then
+    if [ -n "$DESKTOP_SESSION" ]; then
+      __silent_start transmission-gtk -m
+    fi
+  fi
+  return $getRunStatus
 }
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # Custom plugin function
 __custom_plugin() {
-  local exitCodeC=0
-  # execute "git_clone $repo $dir" "Installing plugin name"
-  return $exitCodeC
+  local getRunStatus=0
+  # execute "__run_git_clone_pull repo dir" "Installing plugName"
+  return $getRunStatus
+}
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# execute build script if exists and install failed or set BUILD_SCRIPT_REBUILD to true to always rebuild
+__run_build_script() {
+  local getRunStatus=0
+  if ! __cmd_exists "$BUILD_APPNAME" && [ -f "$INSTDIR/build.sh" ]; then
+    export BUILD_APPNAME BUILD_SCRIPT_SRC_DIR BUILD_SRC_URL BUILD_SCRIPT_REBUILD
+    [ -x "$INSTDIR/build.sh" ] || chmod 755 "$INSTDIR/build.sh"
+    eval "$INSTDIR/build.sh"
+  fi
+  return $getRunStatus
 }
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # Other dependencies
@@ -213,27 +280,30 @@ if_os_id arch && ARCH_USER_REPO="$AUR_PACKAGES"
 # define linux packages
 if if_os linux; then
   if if_os_id arch; then
-    SYSTEM_PACKAGES="$OS_PACKAGES $ARCH_OS_PACKAGES"
+    SYSTEM_PACKAGES="$GLOBAL_OS_PACKAGES $LINUX_OS_PACKAGES $ARCH_OS_PACKAGES"
   elif if_os_id centos; then
-    SYSTEM_PACKAGES="$OS_PACKAGES $CENTOS_OS_PACKAGES"
+    SYSTEM_PACKAGES="$GLOBAL_OS_PACKAGES $LINUX_OS_PACKAGES $CENTOS_OS_PACKAGES"
   elif if_os_id debian; then
-    SYSTEM_PACKAGES="$OS_PACKAGES $DEBIAN_OS_PACKAGES"
+    SYSTEM_PACKAGES="$GLOBAL_OS_PACKAGES $LINUX_OS_PACKAGES $DEBIAN_OS_PACKAGES"
   elif if_os_id ubuntu; then
-    SYSTEM_PACKAGES="$OS_PACKAGES $UBUNTU_OS_PACKAGES"
+    SYSTEM_PACKAGES="$GLOBAL_OS_PACKAGES $LINUX_OS_PACKAGES $UBUNTU_OS_PACKAGES"
   else
-    SYSTEM_PACKAGES="$OS_PACKAGES"
+    SYSTEM_PACKAGES="$GLOBAL_OS_PACKAGES $LINUX_OS_PACKAGES"
   fi
 fi
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # Define MacOS packages - homebrew
 if if_os mac; then
-  SYSTEM_PACKAGES="$OS_PACKAGES $MAC_OS_PACKAGES"
+  SYSTEM_PACKAGES="$GLOBAL_OS_PACKAGES $MAC_OS_PACKAGES"
 fi
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # Define Windows packages - choco
 if if_os win; then
-  SYSTEM_PACKAGES="$OS_PACKAGES $WIN_OS_PACKAGES"
+  SYSTEM_PACKAGES="$GLOBAL_OS_PACKAGES $WIN_OS_PACKAGES"
 fi
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Attempt install from github release
+install_latest_release "$LATEST_RELEASE"
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # install required packages using the aur - Requires yay to be installed
 install_aur "${ARCH_USER_REPO//,/ }"
@@ -270,24 +340,27 @@ ensure_dirs
 ensure_perms
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # Backup if needed
-if [ -d "$APPDIR" ]; then
-  execute "backupapp $APPDIR $APPNAME" "Backing up $APPDIR"
-fi
-# Main progam
+[ -d "$APPDIR" ] && execute "backupapp $APPDIR $APPNAME" "Backing up $APPDIR"
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Get configuration files
+instCode=0
 if __am_i_online; then
   if [ -d "$INSTDIR/.git" ]; then
-    execute "git_update $INSTDIR" "Updating $APPNAME configurations"
+    execute "__run_git_clone_pull $INSTDIR" "Updating $APPNAME configurations"
+    instCode=$?
   else
-    execute "git_clone $REPO $INSTDIR" "Installing $APPNAME configurations"
+    execute "__run_git_clone_pull $REPO $INSTDIR" "Installing $APPNAME configurations"
+    instCode=$?
   fi
   # exit on fail
-  failexitcode $? "Git has failed"
+  __failexitcode $instCode "Failed to setup the git repo from $REPO"
 fi
+unset instCode
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # Install Plugins
+exitCodeP=0
 if __am_i_online; then
   if [ "$PLUGIN_REPOS" != "" ]; then
-    exitCodeP=0
     [ -d "$PLUGIN_DIR" ] || mkdir -p "$PLUGIN_DIR"
     for plugin in $PLUGIN_REPOS; do
       plugin_name="$(basename "$plugin")"
@@ -304,21 +377,21 @@ if __am_i_online; then
   __custom_plugin
   exitCodeP=$(($? + exitCodeP))
   # exit on fail
-  failexitcode $exitCodeP "Installation of plugin failed"
+  __failexitcode $exitCodeP "Installation of plugin failed"
 fi
+unset exitCodeP
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # run post install scripts
 run_postinst() {
-  __run_prepost_install
-  dfmgr_run_post
-  __run_post_install
+  local exitCodeP=0
+  __run_prepost_install || exitCodeP=$((exitCodeP + 1))
+  dfmgr_run_post || exitCodeP=$((exitCodeP + 1))
+  __run_post_install || exitCodeP=$((exitCodeP + 1))
+  return $exitCodeP
 }
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # run post install scripts
 execute "run_postinst" "Running post install scripts"
-# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-# Output post install message
-
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # create version file
 dfmgr_install_version
@@ -327,13 +400,10 @@ dfmgr_install_version
 run_exit
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # run any external scripts
-if ! __cmd_exists "$BUILD_APPNAME" && [ -f "$INSTDIR/build.sh" ]; then
-  BUILD_SCRIPT_SRC_DIR="$PLUGIN_DIR/source"
-  BUILD_SRC_URL=""
-  export BUILD_SCRIPT_SRC_DIR BUILD_SRC_URL
-  eval "$INSTDIR/build.sh"
-  __cmd_exists $BUILD_APPNAME || printf_red "$BUILD_APPNAME is not installed: run $INSTDIR/build.sh"
-fi
+__run_build_script
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Output post install message
+__run_post_message
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # End application
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
