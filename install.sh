@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # shellcheck shell=bash
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-##@Version           :  202304261048-git
+##@Version           :  202304302240-git
 # @@Author           :  Jason Hempstead
 # @@Contact          :  jason@casjaysdev.com
-# @@License          :  LICENSE.md
+# @@License          :  WTFPL
 # @@ReadME           :  install.sh --help
 # @@Copyright        :  Copyright: (c) 2023 Jason Hempstead, Casjays Developments
-# @@Created          :  Saturday, Apr 29, 2023 01:00 EDT
+# @@Created          :  Sunday, Apr 30, 2023 22:40 EDT
 # @@File             :  install.sh
 # @@Description      :  Install configurations for transmission
 # @@Changelog        :  New script
@@ -25,7 +25,7 @@
 # shellcheck disable=SC2199
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 APPNAME="transmission"
-VERSION="202304261048-git"
+VERSION="202304302240-git"
 HOME="${USER_HOME:-$HOME}"
 USER="${SUDO_USER:-$USER}"
 RUN_USER="${SUDO_USER:-$USER}"
@@ -87,7 +87,7 @@ __failexitcode() { [ $1 -ne 0 ] && printf_red "😠 $2 😠" && exit ${1:-4}; }
 __get_exit_status() { s=$? && getRunStatus=$((s + ${getRunStatus:-0})) && return $s; }
 __service_is_running() { systemctl is-active $1 2>&1 | grep -qiw 'active' || return 1; }
 __service_is_active() { systemctl is-enabled $1 2>&1 | grep -qiw 'enabled' || return 1; }
-__get_version() { echo "$@" | awk -F '.' '{ printf("%d%03d%03d%03d\n", $1,$2,$3,$4) }'; }
+__get_version() { echo "$@" | awk -F '.' '{ printf("%d%d%d%d\n", $1,$2,$3,$4) }'; }
 __silent_start() { __cmd_exists $1 && (eval "$*" &>/dev/null &) && __app_is_running $1 || return 1; }
 __symlink() { { __rm_rf "$2" || true; } && ln_sf "$1" "$2" &>/dev/null || { [ -L "$2" ] || return 1; }; }
 __get_pid() { ps -aux | grep -v ' grep ' | grep "$1" | awk -F ' ' '{print $2}' | grep ${2:-[0-9]} || return 1; }
@@ -148,13 +148,13 @@ PLUGIN_REPOS=""
 LATEST_RELEASE=""
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # Specify global packages
-GLOBAL_OS_PACKAGES=""
+GLOBAL_OS_PACKAGES="transmission-cli transmission-daemon "
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # Define linux only packages
-LINUX_OS_PACKAGES="transmission transmission-cli transmission-daemon"
+LINUX_OS_PACKAGES="transmission"
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # Define MacOS only packages
-MAC_OS_PACKAGES="transmission-cli"
+MAC_OS_PACKAGES=""
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # Define Windows only packages
 WIN_OS_PACKAGES=""
@@ -234,8 +234,8 @@ __run_post_install() {
   if __cmd_exists transmission-daemon; then
     __silent_start transmission-daemon
   elif [ -n "$DESKTOP_SESSION" ] && netstatg transmiss | grep -q 9091; then
-    __cmd_exists transmission-remote-gtk && __silent_start transmission-remote-gtk -m
-    #mybrowser http://${HOSTNAME:-localhost}:9091 &
+    __cmd_exists transmission-remote-gtk && __silent_start transmission-remote-gtk -m ||
+      notifications "transmission" "Running on http://${HOSTNAME:-localhost}:9091"
   elif __cmd_exists transmission-gtk; then
     if [ -n "$DESKTOP_SESSION" ]; then
       __silent_start transmission-gtk -m
