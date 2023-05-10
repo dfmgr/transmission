@@ -66,8 +66,7 @@ main() {
       fi
     else
       if ask_confirm "Start transmission daemon?"; then
-        transmission-daemon &&
-          notifications "Torrents" "tranmission-daemon started."
+        transmission-daemon && notifications "Torrents" "transmission-daemon started."
       else
         notifications "Torrents" "User cancelled."
         exitCode=1
