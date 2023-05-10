@@ -151,10 +151,10 @@ PLUGIN_REPOS=""
 LATEST_RELEASE=""
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # Specify global packages
-GLOBAL_OS_PACKAGES="transmission-cli transmission-daemon "
+GLOBAL_OS_PACKAGES=""
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # Define linux only packages
-LINUX_OS_PACKAGES=""
+LINUX_OS_PACKAGES="transmission-cli transmission-daemon"
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # Define MacOS only packages
 MAC_OS_PACKAGES="transmission"
@@ -189,7 +189,7 @@ __run_post_message() {
 # Define pre-install scripts
 __run_pre_install() {
   local getRunStatus=0
-  __kill transmission-gt
+  __kill transmission-qt
   __kill transmission-daemon
   __kill transmission-remote-gtk
   return $getRunStatus
