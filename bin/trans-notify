@@ -62,9 +62,7 @@ main() {
     notifications "Transmission" "$NAME has been 🔽 to $dldir"
     # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if [ -z "$ONLINE" ] && [ -n "$PUSHBULLET_ACCESS_TOKEN" ]; then
-      curl -q -LSs -u "$PUSHBULLET_ACCESS_TOKEN": \
-        --header 'Content-Type: application/json' \
-        -X POST https://api.pushbullet.com/v2/pushes \
+      curl -q -LSs -u "$PUSHBULLET_ACCESS_TOKEN": --header 'Content-Type: application/json' -X POST https://api.pushbullet.com/v2/pushes \
         -d "{\"type\": \"note\", \"title\": \"Torrent has 🔽 on $HOSTNAME\", \"body\": \"$NAME has been downloaded to $dldir.\"}" >/dev/null && echo ""
     else
       false
