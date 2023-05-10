@@ -44,7 +44,7 @@ fi
 # check for command
 __cmd_exists() { which $1 >/dev/null 2>&1 || return 1; }
 __function_exists() { builtin type $1 >/dev/null 2>&1 || return 1; }
-__is_running() { ps aux | grep -v '[g]rep' | grep -q "$1" || return 2; }
+__is_running() { ps aux 2>/dev/null | grep "$1" | grep -vq '[g]rep' || return 2; }
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # custom functions
 
@@ -52,7 +52,7 @@ __is_running() { ps aux | grep -v '[g]rep' | grep -q "$1" || return 2; }
 # Define Variables
 DEFAULT_COLOR="254"
 TD_START_EXIT_STATUS=0
-
+TRANSMISSION_CLI=""
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # Main application
 if __cmd_exists transmission-daemon && ! __is_running transmission-daemon; then
@@ -61,12 +61,12 @@ if __cmd_exists transmission-daemon && ! __is_running transmission-daemon; then
   disown
   sleep 3 && __is_running transmission-daemon && notifications "Transmission" "daemon has started"
 fi
+set -x
 if __cmd_exists transmission-qt; then
   if __is_running transmission-qt; then
     TRANSMISSION_CLI="running"
   else
-    transmission-qt --remote localhost --port 9091 --config-dir --minimized "$HOME/.config/transmission" &>/dev/null &
-    disown
+    transmission-qt --remote localhost --port 9091 --config-dir "$HOME/.config/transmission" --minimized &>/dev/null &
   fi
 elif [ -z "$TRANSMISSION_CLI" ]; then
   if __cmd_exists transmission-remote-gtk; then
@@ -74,7 +74,6 @@ elif [ -z "$TRANSMISSION_CLI" ]; then
       TRANSMISSION_CLI="running"
     else
       transmission-remote-gtk -m &>/dev/null &
-      disown
     fi
   fi
 fi
