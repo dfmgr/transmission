@@ -154,10 +154,10 @@ LATEST_RELEASE=""
 GLOBAL_OS_PACKAGES="transmission-cli transmission-daemon "
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # Define linux only packages
-LINUX_OS_PACKAGES="transmission"
+LINUX_OS_PACKAGES=""
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # Define MacOS only packages
-MAC_OS_PACKAGES=""
+MAC_OS_PACKAGES="transmission"
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # Define Windows only packages
 WIN_OS_PACKAGES=""
