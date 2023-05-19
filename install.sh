@@ -190,8 +190,10 @@ __run_post_message() {
 __run_pre_install() {
   local getRunStatus=0
   __kill transmission-qt
-  __kill transmission-daemon
   __kill transmission-remote-gtk
+  __kill transmission-da
+  __kill transmission-daemon
+  __service_is_active && sudo systemctl disable --now transmission-daemon
   return $getRunStatus
 }
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -214,20 +216,18 @@ __run_post_install() {
   elif [ -z "$transmissionDownloads" ]; then
     transmissionDownloads="$HOME/Downloads/Torrents"
   fi
-  unset -f transmission transmission-daemon
-  __service_is_active && sudo systemctl disable --now transmission-daemon
+  if [ "$transmissionDownloads" = "/mnt/shared/Torrents" ]; then
+    sudo -HE mkdir -p "$transmissionDownloads"
+    sudo -HE chmod -R 777 "$transmissionDownloads"
+  fi
   __mkdir "$HOME/.config/transmission-remote-gtk" "$HOME/.config/transmission-daemon"
   __mkdir "$HOME/Downloads" "$transmissionDownloads/Complete" "$transmissionDownloads/InComplete"
-  if [ -f "$transmissionConf" ]; then
+  if [ -n "$transmissionConf" ] && [ -f "$transmissionConf" ]; then
     __cp_rf "$APPDIR/settings.json" "/tmp/settings.json"
     __replace_one "replacehome/Downloads" "$transmissionDownloads" "/tmp/settings.json"
     __replace_one "replacehome" "$HOME" "/tmp/settings.json"
     if echo "$transmissionConf" | grep -q '/var/lib'; then
       sudo -HE mv -f "/tmp/settings.json" "$transmissionConf"
-    fi
-    if [ "$transmissionDownloads" = "/mnt/shared/Torrents" ]; then
-      sudo -HE mkdir -p "$transmissionDownloads"
-      sudo -HE chmod -R 777 "$transmissionDownloads"
     fi
   fi
   __replace_one "replacehome" "$HOME" "$APPDIR/settings.json"
@@ -239,11 +239,11 @@ __run_post_install() {
   __symlink "$APPDIR/transmission-remote-gtk.json" "$HOME/.config/transmission-remote-gtk/config.json"
   if __cmd_exists transmission-daemon; then
     __silent_start transmission-daemon
-  elif [ -n "$DESKTOP_SESSION" ] && netstatg transmiss | grep -q 9091; then
-    __cmd_exists transmission-remote-gtk && __silent_start transmission-remote-gtk -m ||
-      notifications "transmission" "Running on http://${HOSTNAME:-localhost}:9091"
-  elif __cmd_exists transmission-gtk; then
-    if [ -n "$DESKTOP_SESSION" ]; then
+  fi
+  if [ -n "$DESKTOP_SESSION" ]; then
+    if netstatg transmiss | grep -q 9091; then
+      __cmd_exists transmission-remote-gtk && __silent_start transmission-remote-gtk -m || notifications "transmission" "Running on http://${HOSTNAME:-localhost}:9091"
+    elif __cmd_exists transmission-gtk; then
       __silent_start transmission-gtk -m
     fi
   fi

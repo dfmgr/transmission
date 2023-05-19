@@ -58,7 +58,7 @@ main() {
   NAME="${TR_TORRENT_NAME:-A torrent}"
   ONLINE="$(__am_i_online || echo OFFLINE)"
   if [ -f "$HOME/.config/transmission/settings.json" ]; then
-    dldir="$(grep download-dir "$HOME/.config/transmission/settings.json" | sed 's#[,"]##g' | awk '{print $2}')"
+    dldir="$(grep -s download-dir "$HOME/.config/transmission/settings.json" | sed 's#[,"]##g' | awk '{print $2}')"
     notifications "Transmission" "$NAME has been 🔽 to $dldir"
     # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if [ -z "$ONLINE" ] && [ -n "$PUSHBULLET_ACCESS_TOKEN" ]; then
