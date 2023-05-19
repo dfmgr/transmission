@@ -189,18 +189,18 @@ __run_post_message() {
 # Define pre-install scripts
 __run_pre_install() {
   local getRunStatus=0
-  __kill transmission-qt
-  __kill transmission-remote-gtk
-  __kill transmission-da
-  __kill transmission-daemon
-  __service_is_active && sudo systemctl disable --now transmission-daemon
+
   return $getRunStatus
 }
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # run before primary post install function
 __run_prepost_install() {
   local getRunStatus=0
-
+  __kill transmission-qt
+  __kill transmission-remote-gtk
+  __kill transmission-da
+  __kill transmission-daemon
+  __service_is_active && sudo systemctl disable --now transmission-daemon
   return $getRunStatus
 }
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
