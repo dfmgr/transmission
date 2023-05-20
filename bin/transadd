@@ -65,7 +65,7 @@ main() {
   # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   #check_local "$1" || check_uri "$1" || notifications "Transmission" "Error: unknown torrent location"
   # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  local SERVER="${TORRENT_SERVER:-localhost}:${TORRENT_SERVER_PORT:-9091}" exitCodes=0
+  local SERVER="${TORRENT_SERVER:-localhost}:${TORRENT_SERVER_PORT:-9091}"
   if [ -f "$(command -v transmission-daemon 2>/dev/null)" ]; then
     if ! pgrep -x transmission-da &>/dev/null; then
       __transmission-daemon
@@ -73,14 +73,14 @@ main() {
       sleep 3
     fi
     for torrent in "$@"; do
-      transmission-remote "$SERVER" -a "$@" &>/dev/null || exitCodes=$((exitCodes + 1))
+      transmission-remote "$SERVER" -a "$torrent" &>/dev/null
+      exitCode="$?" && sleep 3
+      if [ "$exitCode" -eq 0 ]; then
+        notifications "Transmission" "🔽 Torrent added.\n\n$torrent"
+      else
+        notifications "Transmission" "🔽 Torrent failed.\n\n$torrent"
+      fi
     done
-    exitCode="$exitCodes" && sleep 10
-    if [ "$exitCode" -eq 0 ]; then
-      notifications "Transmission" "🔽 Torrent added."
-    else
-      notifications "Transmission" "🔽 Torrent failed."
-    fi
   elif [ -f "$(command -v transmission-remote-gtk 2>/dev/null)" ]; then
     if ! pgrep -x transmission-re &>/dev/null; then
       transmission-remote-gtk &>/dev/null &
