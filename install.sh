@@ -218,10 +218,13 @@ __run_post_install() {
   fi
   if [ "$transmissionDownloads" = "/mnt/shared/Torrents" ]; then
     sudo -HE mkdir -p "$transmissionDownloads"
-    sudo -HE chmod -R 777 "$transmissionDownloads"
+    sudo -HE chmod -Rf 777 "$transmissionDownloads"
   fi
-  __mkdir "$HOME/.config/transmission-remote-gtk" "$HOME/.config/transmission-daemon"
-  __mkdir "$HOME/Downloads" "$transmissionDownloads/Complete" "$transmissionDownloads/InComplete"
+  __mkdir "$transmissionDownloads"
+  __mkdir "$transmissionDownloads/Complete"
+  __mkdir "$transmissionDownloads/InComplete"
+  __mkdir "$HOME/.config/transmission-daemon"
+  __mkdir "$HOME/.config/transmission-remote-gtk"
   if [ -n "$transmissionConf" ] && [ -f "$transmissionConf" ]; then
     __cp_rf "$APPDIR/settings.json" "/tmp/settings.json"
     __replace_one "replacehome/Downloads" "$transmissionDownloads" "/tmp/settings.json"
@@ -237,6 +240,10 @@ __run_post_install() {
   fi
   __symlink "$APPDIR/settings.json" "$HOME/.config/transmission-daemon/settings.json"
   __symlink "$APPDIR/transmission-remote-gtk.json" "$HOME/.config/transmission-remote-gtk/config.json"
+  if [ -d "$APPDIR/etc/blocklists" ]; then
+    __mkdir "$HOME/.config/transmission-daemon/blocklists"
+    __cp_rf "$APPDIR/etc/blocklists/." "$HOME/.config/transmission-daemon/blocklists"
+  fi
   if __cmd_exists transmission-daemon; then
     __silent_start transmission-daemon
   fi
