@@ -264,6 +264,8 @@ EOF
   am_i_online --error || exit 1     # exit 1 if no internet
   # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   # APP Variables overrides
+  out_name="blocklist.gz"
+  out_dir="$PWD/transmission"
   user_agent="Mozilla/5.0 (X11; Linux x86_64; rv:75.0) Gecko/20100101 Firefox/75.0"
   lists_url="https://www.iblocklist.com/lists.php"
   download_url="https://list.iblocklist.com/?list=%s&fileformat=p2p&archiveformat=gz"
@@ -273,30 +275,32 @@ EOF
   # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   # begin main app
   case "$1" in
-  download | update)
-    [ -d "./download" ] && rm -Rf ./download/* || mkdir -p "./download"
+  download | update | create)
+    [ -d "$out_dir" ] || mkdir -p "$out_dir"
+    [ -f "$out_dir/$out_name" ] && rm -Rf "$out_dir/$out_name"
+    [ -d "$TRANS_BLOCKLIST_TEMP_DIR" ] && rm -Rf "$TRANS_BLOCKLIST_TEMP_DIR"/* || mkdir -p "$TRANS_BLOCKLIST_TEMP_DIR"
     get_free_urls=$(print_results | grep 'yes' | awk '{print $3}' | grep 'http')
     for free_url in $get_free_urls; do
       ret_name="$(echo "${free_url}" | awk -F'list=' '{print $2}' | sed 's|&.*||g')"
-      echo "downloading ${free_url} to ./download/${ret_name}.gz"
-      curl -q -LSs "${free_url}" -o "./download/${ret_name}.gz" 2>/dev/null
-      if [ -s "./download/${ret_name}.gz" ]; then
-        gunzip "./download/${ret_name}.gz"
-        cat "./download/${ret_name}" | grep -v -E '^#' >>"./download/blacklist.txt"
-        rm -f "./download/${ret_name}"
+      echo "downloading ${free_url} to $TRANS_BLOCKLIST_TEMP_DIR/${ret_name}.gz"
+      curl -q -LSs "${free_url}" -o "$TRANS_BLOCKLIST_TEMP_DIR/${ret_name}.gz" 2>/dev/null
+      if [ -s "$TRANS_BLOCKLIST_TEMP_DIR/${ret_name}.gz" ]; then
+        gunzip "$TRANS_BLOCKLIST_TEMP_DIR/${ret_name}.gz"
+        cat "$TRANS_BLOCKLIST_TEMP_DIR/${ret_name}" | grep -v -E '^#' >>"$TRANS_BLOCKLIST_TEMP_DIR/blacklist.txt"
+        rm -f "$TRANS_BLOCKLIST_TEMP_DIR/${ret_name}"
       fi
     done
-    curl -A "Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:47.0) Gecko/20100101 Firefox/47.0" -s https://mirror.codebucket.de/transmission/blocklist.p2p >>./download/blacklist.txt
-    curl -A "Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:47.0) Gecko/20100101 Firefox/47.0" -s https://www.wael.name/wael.list.txt | sed "/^#.*/d" | grep -Ev "^[0-9][0-9][0-9]\.[0-9][0-9][0-9].*" >>./download/blacklist.txt
-    sort --unique ./download/blacklist.txt >./download/blacklist.txt.tmp
-    mv -f ./download/blacklist.txt.tmp ./download/blacklist.txt
-    grep -v -E '^#' "./download/blacklist.txt" | gzip - >biglist.p2p.gz
-    check=$(du -s biglist.p2p.gz | awk '{print $1}')
-    if [ -f "biglist.p2p.gz" ]; then
-      echo Created biglist.p2p.gz
-      rm -Rf ./download/*
+    curl -A "Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:47.0) Gecko/20100101 Firefox/47.0" -s https://mirror.codebucket.de/transmission/blocklist.p2p >>$TRANS_BLOCKLIST_TEMP_DIR/blacklist.txt
+    curl -A "Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:47.0) Gecko/20100101 Firefox/47.0" -s https://www.wael.name/wael.list.txt | sed "/^#.*/d" | grep -Ev "^[0-9][0-9][0-9]\.[0-9][0-9][0-9].*" >>$TRANS_BLOCKLIST_TEMP_DIR/blacklist.txt
+    sort --unique $TRANS_BLOCKLIST_TEMP_DIR/blacklist.txt >$TRANS_BLOCKLIST_TEMP_DIR/blacklist.txt.tmp
+    mv -f $TRANS_BLOCKLIST_TEMP_DIR/blacklist.txt.tmp $TRANS_BLOCKLIST_TEMP_DIR/blacklist.txt
+    grep -v -E '^#' "$TRANS_BLOCKLIST_TEMP_DIR/blacklist.txt" | gzip - >"$out_dir/$out_name"
+    check=$(du -s "$out_dir/$out_name" | awk '{print $1}')
+    if [ -f "$out_dir/$out_name" ]; then
+      echo "Created $out_dir/$out_name"
+      rm -Rf "$TRANS_BLOCKLIST_TEMP_DIR"/*
     else
-      echo "biglist.p2p.gz not created"
+      echo "$out_dir/$out_name not created"
     fi
     ;;
 
