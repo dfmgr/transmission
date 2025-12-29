@@ -42,7 +42,7 @@ else
 fi
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # check for command
-__cmd_exists() { which $1 >/dev/null 2>&1 || return 1; }
+__cmd_exists() { command -v "$1" >/dev/null 2>&1 || return 1; }
 __function_exists() { builtin type $1 >/dev/null 2>&1 || return 1; }
 __is_running() { ps aux 2>/dev/null | grep "$1" | grep -vq '[g]rep' || return 2; }
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -61,7 +61,6 @@ if __cmd_exists transmission-daemon && ! __is_running transmission-daemon; then
   disown
   sleep 3 && __is_running transmission-daemon && notifications "Transmission" "daemon has started"
 fi
-set -x
 if __cmd_exists transmission-qt; then
   if __is_running transmission-qt; then
     TRANSMISSION_CLI="running"
