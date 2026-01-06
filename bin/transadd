@@ -1,14 +1,6 @@
 #!/usr/bin/env bash
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-PROG="transadd"
-USER="${SUDO_USER:-${USER}}"
-HOME="${USER_HOME:-${HOME}}"
-SRC_DIR="${BASH_SOURCE%/*}"
-# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-#set opts
-
-# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-##@Version       : 031620210558-git
+##@Version       : 202501060000-git
 # @Author        : Jason Hempstead
 # @Contact       : jason@casjaysdev.pro
 # @License       : WTFPL
@@ -16,101 +8,249 @@ SRC_DIR="${BASH_SOURCE%/*}"
 # @Copyright     : Copyright: (c) 2021 Jason Hempstead, CasjaysDev
 # @Created       : Tuesday, Mar 16, 2021 05:58 EDT
 # @File          : transadd
-# @Description   : Mimeapp script for adding torrent to transmission-daemon.
+# @Description   : Mimeapp script for adding torrent to transmission-daemon
+# @Changelog     : Refactored for self-contained operation
 # @TODO          :
 # @Other         :
 # @Resource      :
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-# Main function file
-if [ -f "$SRC_DIR/functions.bash" ]; then
-  FUNCTIONS_DIR="$SRC_DIR"
-  . "$FUNCTIONS_DIR/functions.bash"
-elif [ -f "$HOME/.local/bin/functions.bash" ]; then
-  FUNCTIONS_DIR="$HOME/.local/bin"
-  . "$FUNCTIONS_DIR/functions.bash"
-else
-  printf "\t\t\033[0;31m%s \033[0m\n" "Couldn't source the functions file from $FUNCTIONS_DIR"
-  return 1
-fi
+# Script variables
+PROG="transadd"
+VERSION="202501060000-git"
+USER="${SUDO_USER:-${USER}}"
+HOME="${USER_HOME:-${HOME}}"
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-# helper function
-__transmission-daemon() {
-  transmission-daemon &
-  disown
+# Environment Detection
+__get_os() {
+  case "$(uname -s)" in
+    Linux*) echo "linux" ;;
+    Darwin*) echo "mac" ;;
+    *BSD*) echo "bsd" ;;
+    MINGW*|MSYS*|CYGWIN*) echo "windows" ;;
+    *) echo "unknown" ;;
+  esac
 }
-__version() { app_version; }
+
+__is_remote() {
+  [ -n "${SSH_CLIENT:-}" ] || [ -n "${SSH_TTY:-}" ] || [ -n "${SSH_CONNECTION:-}" ]
+}
+
+__has_display() {
+  [ -n "${DISPLAY:-}" ] || [ -n "${WAYLAND_DISPLAY:-}" ]
+}
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Core helper functions
+__cmd_exists() { command -v "$1" >/dev/null 2>&1; }
+
+__is_running() {
+  local proc="$1"
+  case "$(__get_os)" in
+    mac) pgrep -x "$proc" >/dev/null 2>&1 ;;
+    windows) tasklist 2>/dev/null | grep -qi "$proc" ;;
+    *) pgrep -x "$proc" >/dev/null 2>&1 || pgrep -f "$proc" >/dev/null 2>&1 ;;
+  esac
+}
+
+__printf_color() {
+  local color="${2:-0}"
+  printf "\033[0;%sm%s\033[0m\n" "$color" "$1"
+}
+__printf_red() { __printf_color "$1" "31"; }
+__printf_green() { __printf_color "$1" "32"; }
+__printf_yellow() { __printf_color "$1" "33"; }
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Smart notifications
+__notifications() {
+  local title="$1" msg="$2"
+
+  # Remote/no display - just print to stderr
+  if __is_remote || ! __has_display; then
+    printf "[%s] %s\n" "$title" "$msg" >&2
+    return 0
+  fi
+
+  # GUI notifications based on OS
+  case "$(__get_os)" in
+    mac)
+      osascript -e "display notification \"$msg\" with title \"$title\"" 2>/dev/null && return 0
+      ;;
+    linux|bsd)
+      if __cmd_exists notify-send; then
+        notify-send "$title" "$msg" 2>/dev/null && return 0
+      fi
+      ;;
+    windows)
+      if __cmd_exists powershell.exe; then
+        powershell.exe -Command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.MessageBox]::Show('$msg', '$title')" 2>/dev/null && return 0
+      fi
+      ;;
+  esac
+
+  # Fallback
+  printf "[%s] %s\n" "$title" "$msg" >&2
+}
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Torrent validation
+__validate_torrent() {
+  local input="$1"
+
+  # Empty input
+  if [ -z "$input" ]; then
+    return 1
+  fi
+
+  # Magnet link validation
+  if [[ "$input" == magnet:* ]]; then
+    if [[ "$input" =~ ^magnet:\?xt=urn:btih:[a-zA-Z0-9]{32,} ]]; then
+      return 0
+    else
+      __printf_red "Error: Invalid magnet link format"
+      return 1
+    fi
+  fi
+
+  # File validation
+  if [ -f "$input" ]; then
+    # Check if it's actually a torrent file (starts with 'd' for bencoded dict)
+    if head -c1 "$input" 2>/dev/null | grep -q 'd'; then
+      return 0
+    else
+      __printf_red "Error: File is not a valid torrent file: $input"
+      return 1
+    fi
+  fi
+
+  # URL validation (http/https torrent)
+  if [[ "$input" =~ ^https?://.+\.(torrent|php|action) ]] || [[ "$input" =~ ^https?://.*[?&].*torrent ]]; then
+    return 0
+  fi
+
+  __printf_red "Error: Torrent does not exist or invalid: $input"
+  return 1
+}
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Start transmission daemon
+__start_daemon() {
+  transmission-daemon &
+  disown 2>/dev/null || true
+}
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Version and help
+__version() { echo "$PROG $VERSION"; }
+
 __help() {
-  app_help "Usage: transadd  -  transadd --version" \
-    "-v, --version          -  display version" \
-    "-h, --help             -  display help"
+  cat <<EOF
+$PROG $VERSION - Add torrents to transmission-daemon
+
+Usage: $PROG [options] <torrent_file|magnet_link|url> [...]
+
+Options:
+  -v, --version    Show version
+  -h, --help       Show this help
+
+Arguments:
+  torrent_file     Path to a .torrent file
+  magnet_link      Magnet link (magnet:?xt=urn:btih:...)
+  url              HTTP/HTTPS URL to a torrent file
+
+Environment:
+  TORRENT_SERVER       Server hostname (default: localhost)
+  TORRENT_SERVER_PORT  Server port (default: 9091)
+
+Examples:
+  $PROG ~/Downloads/file.torrent
+  $PROG "magnet:?xt=urn:btih:..."
+  $PROG https://example.com/file.torrent
+EOF
 }
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # Main function
 main() {
-  # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  # options
-  case $1 in
-  -v | --version) __version ;;
-  -h | --help) __help ;;
+  local exitCode=0
+  local SERVER="${TORRENT_SERVER:-localhost}:${TORRENT_SERVER_PORT:-9091}"
+
+  # Parse options
+  case "${1:-}" in
+    -v|--version) __version; exit 0 ;;
+    -h|--help) __help; exit 0 ;;
   esac
-  # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  # Required app check
-  cmd_exists --error bash || exit 1
-  # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  # begin main app
-  if [ "$1" = "" ]; then
-    notifications "Transmission" "Error: No torrent file recieved"
+
+  # Check for input
+  if [ $# -eq 0 ]; then
+    __notifications "Transmission" "Error: No torrent file received"
+    __printf_red "Error: No torrent file received"
+    __help >&2
     exit 1
   fi
-  # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  #check_local "$1" || check_uri "$1" || notifications "Transmission" "Error: unknown torrent location"
-  # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  local SERVER="${TORRENT_SERVER:-localhost}:${TORRENT_SERVER_PORT:-9091}"
-  if [ -f "$(command -v transmission-daemon 2>/dev/null)" ]; then
-    if ! pgrep -x transmission-da &>/dev/null; then
-      __transmission-daemon
-      notifications "Transmission" "Starting transmission daemon..."
+
+  # Try transmission-daemon first
+  if __cmd_exists transmission-daemon; then
+    # Start daemon if not running
+    if ! __is_running transmission-daemon; then
+      __start_daemon
+      __notifications "Transmission" "Starting transmission daemon..."
       sleep 3
     fi
+
+    # Add each torrent
     for torrent in "$@"; do
-      transmission-remote "$SERVER" -a "$torrent" &>/dev/null
-      exitCode="$?" && sleep 3
-      if [ "$exitCode" -eq 0 ]; then
-        notifications "Transmission" "🔽 Torrent added.\n\n$torrent"
+      # Validate torrent
+      if ! __validate_torrent "$torrent"; then
+        __notifications "Transmission" "Invalid torrent: $torrent"
+        exitCode=1
+        continue
+      fi
+
+      # Add torrent
+      if transmission-remote "$SERVER" -a "$torrent" &>/dev/null; then
+        __notifications "Transmission" "Torrent added: $(basename "$torrent" 2>/dev/null || echo "$torrent")"
+        sleep 1
       else
-        notifications "Transmission" "🔽 Torrent failed.\n\n$torrent"
+        __notifications "Transmission" "Failed to add: $(basename "$torrent" 2>/dev/null || echo "$torrent")"
+        exitCode=1
       fi
     done
-  elif [ -f "$(command -v transmission-remote-gtk 2>/dev/null)" ]; then
-    if ! pgrep -x transmission-re &>/dev/null; then
+
+  # Fallback to transmission-remote-gtk
+  elif __cmd_exists transmission-remote-gtk && __has_display && ! __is_remote; then
+    if ! __is_running transmission-remote-gtk; then
       transmission-remote-gtk &>/dev/null &
-      notifications "Transmission" "Starting transmission gui..."
+      disown 2>/dev/null || true
+      __notifications "Transmission" "Starting transmission GUI..."
       sleep 3
     fi
     transmission-remote-gtk "$@" 2>/dev/null
-    exitCode="$?" && sleep 10
-  elif [ -f "$(command -v transmission-gtk 2>/dev/null)" ]; then
-    if ! pgrep -x transmission-gt &>/dev/null; then
+    exitCode=$?
+    sleep 3
+
+  # Fallback to transmission-gtk
+  elif __cmd_exists transmission-gtk && __has_display && ! __is_remote; then
+    if ! __is_running transmission-gtk; then
       transmission-gtk &
-      notifications "Transmission" "Starting transmission gui..."
+      disown 2>/dev/null || true
+      __notifications "Transmission" "Starting transmission GUI..."
       sleep 3
     fi
     transmission-gtk "$@" &>/dev/null
-    exitCode="$?" && sleep 10
+    exitCode=$?
     if [ "$exitCode" -eq 0 ]; then
-      notifications "Transmission" "🔽 Torrent added."
+      __notifications "Transmission" "Torrent(s) added"
     else
-      notifications "Transmission" "🔽 Torrent failed."
+      __notifications "Transmission" "Failed to add torrent(s)"
     fi
+    sleep 3
+
   else
+    __printf_red "Error: No transmission client found"
+    __printf_yellow "Install transmission-daemon, transmission-gtk, or transmission-remote-gtk"
     exitCode=1
   fi
-  return "${exitCode:-$?}"
+
+  return "$exitCode"
 }
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-# execute function
+# Execute
 main "$@"
-# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 exit $?
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # end

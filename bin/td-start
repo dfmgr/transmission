@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # shellcheck shell=bash
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-##@Version           :  202305030941-git
+##@Version           :  202501060000-git
 # @@Author           :  Jason Hempstead
 # @@Contact          :  jason@casjaysdev.pro
 # @@License          :  LICENSE.md
@@ -10,7 +10,7 @@
 # @@Created          :  Tuesday, May 09, 2023 22:36 EDT
 # @@File             :  td-start
 # @@Description      :  Autostart script for transmission-daemon
-# @@Changelog        :  New script
+# @@Changelog        :  Refactored for self-contained operation
 # @@TODO             :  Better documentation
 # @@Other            :
 # @@Resource         :
@@ -25,62 +25,168 @@
 # shellcheck disable=SC2199
 # shellcheck disable=SC2317
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-# script variables
-APPNAME="$(basename "$0" 2>/dev/null)"
-VERSION="202305030941-git"
+# Script variables
+PROG="$(basename "$0" 2>/dev/null)"
+VERSION="202501060000-git"
 RUN_USER="$USER"
 SET_UID="$(id -u)"
 SCRIPT_SRC_DIR="${BASH_SOURCE%/*}"
 TD_START_CWD="$(realpath "$PWD")"
-# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-# script functions
-if [ "$SHOW_RAW" != "true" ]; then
-  __printf_color() { printf "%b" "$(tput setaf "${2:-7}" 2>/dev/null)" "$1\n" "$(tput sgr0 2>/dev/null)"; }
-else
-  # Disable colorization
-  __printf_color() { { [ -z "$2" ] || DEFAULT_COLOR=$2; } && printf '%b\n' "$1" | tr -d '\t' | sed '/^%b$/d;s,\x1B\[ 0-9;]*[a-zA-Z],,g'; }
-fi
-# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-# check for command
-__cmd_exists() { command -v "$1" >/dev/null 2>&1 || return 1; }
-__function_exists() { builtin type $1 >/dev/null 2>&1 || return 1; }
-__is_running() { ps aux 2>/dev/null | grep "$1" | grep -vq '[g]rep' || return 2; }
-# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-# custom functions
-
-# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-# Define Variables
-DEFAULT_COLOR="254"
 TD_START_EXIT_STATUS=0
-TRANSMISSION_CLI=""
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Environment Detection
+__get_os() {
+  case "$(uname -s)" in
+    Linux*) echo "linux" ;;
+    Darwin*) echo "mac" ;;
+    *BSD*) echo "bsd" ;;
+    MINGW*|MSYS*|CYGWIN*) echo "windows" ;;
+    *) echo "unknown" ;;
+  esac
+}
+
+__is_remote() {
+  [ -n "${SSH_CLIENT:-}" ] || [ -n "${SSH_TTY:-}" ] || [ -n "${SSH_CONNECTION:-}" ]
+}
+
+__has_display() {
+  [ -n "${DISPLAY:-}" ] || [ -n "${WAYLAND_DISPLAY:-}" ]
+}
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Core helper functions
+__cmd_exists() { command -v "$1" >/dev/null 2>&1; }
+
+__is_running() {
+  local proc="$1"
+  case "$(__get_os)" in
+    mac) pgrep -x "$proc" >/dev/null 2>&1 ;;
+    windows) tasklist 2>/dev/null | grep -qi "$proc" ;;
+    *) pgrep -x "$proc" >/dev/null 2>&1 || pgrep -f "$proc" >/dev/null 2>&1 ;;
+  esac
+}
+
+__printf_color() {
+  if [ "$SHOW_RAW" != "true" ]; then
+    printf "%b" "$(tput setaf "${2:-7}" 2>/dev/null)" "$1\n" "$(tput sgr0 2>/dev/null)"
+  else
+    printf '%b\n' "$1" | tr -d '\t' | sed '/^%b$/d;s,\x1B\[ 0-9;]*[a-zA-Z],,g'
+  fi
+}
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Smart notifications
+__notifications() {
+  local title="$1" msg="$2"
+
+  # Remote/no display - just print to stderr
+  if __is_remote || ! __has_display; then
+    printf "[%s] %s\n" "$title" "$msg" >&2
+    return 0
+  fi
+
+  # GUI notifications based on OS
+  case "$(__get_os)" in
+    mac)
+      osascript -e "display notification \"$msg\" with title \"$title\"" 2>/dev/null && return 0
+      ;;
+    linux|bsd)
+      if __cmd_exists notify-send; then
+        notify-send "$title" "$msg" 2>/dev/null && return 0
+      fi
+      ;;
+    windows)
+      if __cmd_exists powershell.exe; then
+        powershell.exe -Command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.MessageBox]::Show('$msg', '$title')" 2>/dev/null && return 0
+      fi
+      ;;
+  esac
+
+  # Fallback
+  printf "[%s] %s\n" "$title" "$msg" >&2
+}
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Smart GTK app launcher - handles -m flag compatibility
+__start_transmission_gtk() {
+  local app="$1"
+  local help_output
+
+  # Get help output to check supported flags
+  help_output="$("$app" --help 2>&1 || true)"
+
+  # Try different minimized/tray options based on what's supported
+  if echo "$help_output" | grep -qE '\-m[,[:space:]]|--minimized'; then
+    "$app" -m &>/dev/null &
+  elif echo "$help_output" | grep -qE '\-\-iconify|\-\-minimize'; then
+    "$app" --iconify &>/dev/null &
+  else
+    # No minimize flag supported - start normally
+    "$app" &>/dev/null &
+  fi
+  disown 2>/dev/null || true
+}
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Version and help
+__version() { echo "$PROG $VERSION"; }
+
+__help() {
+  cat <<EOF
+$PROG $VERSION - Autostart script for transmission-daemon
+
+Usage: $PROG [options]
+
+Options:
+  -v, --version    Show version
+  -h, --help       Show this help
+
+Description:
+  Starts transmission-daemon and optionally a GUI client
+  (transmission-qt or transmission-remote-gtk)
+EOF
+}
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Parse arguments
+case "${1:-}" in
+  -v|--version) __version; exit 0 ;;
+  -h|--help) __help; exit 0 ;;
+esac
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # Main application
+TRANSMISSION_CLI=""
+
+# Start daemon if not running
 if __cmd_exists transmission-daemon && ! __is_running transmission-daemon; then
   [ -d "$HOME/.local/run" ] || mkdir -p "$HOME/.local/run"
   transmission-daemon --pid-file "$HOME/.local/run/transmission-daemon.pid" &>/dev/null &
-  disown
-  sleep 3 && __is_running transmission-daemon && notifications "Transmission" "daemon has started"
-fi
-if __cmd_exists transmission-qt; then
-  if __is_running transmission-qt; then
-    TRANSMISSION_CLI="running"
+  disown 2>/dev/null || true
+  sleep 3
+  if __is_running transmission-daemon; then
+    __notifications "Transmission" "Daemon has started"
   else
-    transmission-qt --remote localhost --port 9091 --config-dir "$HOME/.config/transmission" --minimized &>/dev/null &
+    __notifications "Transmission" "Failed to start daemon"
+    TD_START_EXIT_STATUS=1
   fi
-elif [ -z "$TRANSMISSION_CLI" ]; then
-  if __cmd_exists transmission-remote-gtk; then
+fi
+
+# Start GUI client if we have a display
+if __has_display && ! __is_remote; then
+  # Prefer transmission-qt (better --minimized support)
+  if __cmd_exists transmission-qt; then
+    if __is_running transmission-qt; then
+      TRANSMISSION_CLI="running"
+    else
+      transmission-qt --minimized &>/dev/null &
+      disown 2>/dev/null || true
+    fi
+  elif __cmd_exists transmission-remote-gtk; then
     if __is_running transmission-remote-gtk; then
       TRANSMISSION_CLI="running"
     else
-      transmission-remote-gtk -m &>/dev/null &
+      # Use smart launcher to handle -m flag compatibility
+      __start_transmission_gtk transmission-remote-gtk
     fi
   fi
 fi
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-# End application
-# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-# lets exit with code
-# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Exit
 exit $TD_START_EXIT_STATUS
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # ex: ts=2 sw=2 et filetype=sh

@@ -1,14 +1,6 @@
 #!/usr/bin/env bash
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-PROG="trans-status"
-USER="${SUDO_USER:-${USER}}"
-HOME="${USER_HOME:-${HOME}}"
-SRC_DIR="${BASH_SOURCE%/*}"
-# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-#set opts
-
-# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-##@Version       : 031620210739-git
+##@Version       : 202501060000-git
 # @Author        : Jason Hempstead
 # @Contact       : jason@casjaysdev.pro
 # @License       : WTFPL
@@ -16,99 +8,221 @@ SRC_DIR="${BASH_SOURCE%/*}"
 # @Copyright     : Copyright: (c) 2021 Jason Hempstead, CasjaysDev
 # @Created       : Tuesday, Mar 16, 2021 07:39 EDT
 # @File          : trans-status
-# @Description   : transmission status script.
+# @Description   : Transmission status script with emoji icons
+# @Changelog     : Refactored for self-contained operation
 # @TODO          :
 # @Other         :
 # @Resource      :
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-# Main function file
-if [ -f "$SRC_DIR/functions.bash" ]; then
-  FUNCTIONS_DIR="$SRC_DIR"
-  . "$FUNCTIONS_DIR/functions.bash"
-elif [ -f "$HOME/.local/bin/functions.bash" ]; then
-  FUNCTIONS_DIR="$HOME/.local/bin"
-  . "$FUNCTIONS_DIR/functions.bash"
-else
-  printf "\t\t\033[0;31m%s \033[0m\n" "Couldn't source the functions file from $FUNCTIONS_DIR"
-  return 1
-fi
+# Script variables
+PROG="trans-status"
+VERSION="202501060000-git"
+USER="${SUDO_USER:-${USER}}"
+HOME="${USER_HOME:-${HOME}}"
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-# helper function
-__version() { app_version; }
+# Environment Detection
+__get_os() {
+  case "$(uname -s)" in
+    Linux*) echo "linux" ;;
+    Darwin*) echo "mac" ;;
+    *BSD*) echo "bsd" ;;
+    MINGW*|MSYS*|CYGWIN*) echo "windows" ;;
+    *) echo "unknown" ;;
+  esac
+}
+
+__is_remote() {
+  [ -n "${SSH_CLIENT:-}" ] || [ -n "${SSH_TTY:-}" ] || [ -n "${SSH_CONNECTION:-}" ]
+}
+
+__has_display() {
+  [ -n "${DISPLAY:-}" ] || [ -n "${WAYLAND_DISPLAY:-}" ]
+}
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Core helper functions
+__cmd_exists() { command -v "$1" >/dev/null 2>&1; }
+
+__is_running() {
+  local proc="$1"
+  case "$(__get_os)" in
+    mac) pgrep -x "$proc" >/dev/null 2>&1 ;;
+    windows) tasklist 2>/dev/null | grep -qi "$proc" ;;
+    *) pgrep -x "$proc" >/dev/null 2>&1 || pgrep -f "$proc" >/dev/null 2>&1 ;;
+  esac
+}
+
+__printf_color() {
+  local color="${2:-0}"
+  printf "\033[0;%sm%s\033[0m\n" "$color" "$1"
+}
+__printf_red() { __printf_color "$1" "31"; }
+__printf_green() { __printf_color "$1" "32"; }
+__printf_yellow() { __printf_color "$1" "33"; }
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Terminal launcher
+__myterminal() {
+  local cmd="$1"
+  shift
+
+  # Find available terminal emulator
+  local term=""
+  for t in "$TERMINAL" x-terminal-emulator gnome-terminal konsole xfce4-terminal alacritty kitty foot wezterm xterm urxvt; do
+    if __cmd_exists "$t"; then
+      term="$t"
+      break
+    fi
+  done
+
+  if [ -z "$term" ]; then
+    __printf_red "Error: No terminal emulator found"
+    return 1
+  fi
+
+  # Launch based on terminal type
+  case "$term" in
+    gnome-terminal)
+      "$term" -- "$cmd" "$@" &
+      ;;
+    konsole)
+      "$term" -e "$cmd" "$@" &
+      ;;
+    xfce4-terminal)
+      "$term" -e "$cmd $*" &
+      ;;
+    alacritty|kitty|foot|wezterm)
+      "$term" -e "$cmd" "$@" &
+      ;;
+    *)
+      "$term" -e "$cmd" "$@" &
+      ;;
+  esac
+  disown 2>/dev/null || true
+}
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Version and help
+__version() { echo "$PROG $VERSION"; }
+
 __help() {
-  printf_help "Usage:  trans-status |  Show transmission status " \
-    "-v, --version          -  display version" \
-    "-h, --help             -  display help"
+  cat <<EOF
+$PROG $VERSION - Transmission status display
+
+Usage: $PROG [options] [mode]
+
+Options:
+  -v, --version    Show version
+  -h, --help       Show this help
+
+Modes:
+  (default)        Show emoji status summary
+  list             Show torrent list
+  1                Open torrent client in terminal (click action)
+
+Environment:
+  TORRENT_SERVER   Server address (default: localhost:9091)
+  BLOCK_BUTTON     Alternative mode selector (for status bars)
+
+Status Icons:
+  Stopped     Idle      Uploading    Downloading    Complete    Seeding    Error
+EOF
+}
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Get status with emoji icons
+__status() {
+  local SERVER="$1"
+  local status idle percent
+
+  status="$(transmission-remote "$SERVER" -l 2>/dev/null | grep -Ev ' ID |Sum:' || return 1)"
+  idle="$(echo "$status" | grep 'Idle' || true)"
+  percent="$(echo "$status" | grep '%' || true)"
+
+  if [ -n "$idle" ] || [ -n "$percent" ]; then
+    printf '%s%s' "$percent" "$idle" |
+      sed "
+        s/.*Stopped.*/A/g;
+        s/.*Seeding.*/Z/g;
+        s/.*100%.*/N/g;
+        s/.*Idle.*/B/g;
+        s/.*Uploading.*/L/g;
+        s/.*%.*/M/g" |
+      sort -h | uniq -c | sed "
+        s/A//g;
+        s/B//g;
+        s/L//g;
+        s/M//g;
+        s/N//g;
+        s/Z//g" | awk '{print $2, $1}' | sed -e "s/ $//g" | tr '\n' ' '
+  fi
+
+  [ -n "$idle" ] || [ -n "$percent" ] || printf ""
 }
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # Main function
 main() {
-  # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  # options
-  case $1 in
-  -v | --version) __version ;;
-  -h | --help) __help ;;
-  esac
-  # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  # Required app check
-  cmd_exists --error bash || exit 1
-  # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  # begin main app
+  local exitCode=0
   local BLOCK="${BLOCK_BUTTON:-$1}"
   local SERVER="${TORRENT_SERVER:-localhost:9091}"
-  __status() {
-    local status idle percent
-    status="$(transmission-remote "$SERVER" -l 2>/dev/null | grep -Ev ' ID |Sum:' || return 1)"
-    idle="$(echo "$status" | grep 'Idle' || return 1)"
-    percent="$(echo "$status" | grep '%' || return 1)"
-    if [ -n "$idle" ] || [[ -n "$percent" ]]; then
-      printf '%s%s' "$percent" "$idle" |
-        sed " # This first sed command is to ensure a desirable order with sort
-      s/.*Stopped.*/A/g;
-      s/.*Seeding.*/Z/g;
-      s/.*100%.*/N/g;
-      s/.*Idle.*/B/g;
-      s/.*Uploading.*/L/g;
-      s/.*%.*/M/g" |
-        sort -h | uniq -c | sed " # Now we replace the standin letters with icons.
-        s/A/🛑/g;
-        s/B/⌛️/g;
-        s/L/🔼/g;
-        s/M/🔽/g;
-        s/N/✅/g;
-        s/Z/🌱/g" | awk '{print $2, $1}' | sed -e "s/ $//g" | tr '\n' ' '
-    fi
-    [ -n "$idle" ] || [ -n "$percent" ] || printf "🛑"
-  }
-  case $BLOCK in
-  1)
-    myterminal -e mytorrent 2>/dev/null && exitCode=0 || exitCode=1
-    ;;
-  list)
-    resp="$(transmission-remote "$SERVER" -l 2>/dev/null | grep -Ev ' ID |Sum:' || return 1)"
-    if [[ -n "$resp" ]]; then
-      echo "$resp" | sed 's|^     ||g'
-    else
-      return 1
-    fi
-    ;;
-  *)
-    resp="$(__status 2>/dev/null)"
-    if [[ -z "$resp" ]]; then
-      echo '😥'
-      exitCode=1
-    else
-      printf '%s\n' "$resp"
-      exitCode=0
-    fi
-    ;;
+
+  # Parse options
+  case "${1:-}" in
+    -v|--version) __version; exit 0 ;;
+    -h|--help) __help; exit 0 ;;
   esac
-  return ${exitCode:-$?}
+
+  # Check for transmission-remote
+  if ! __cmd_exists transmission-remote; then
+    echo ""
+    exit 1
+  fi
+
+  # Check if daemon is running
+  if ! __is_running transmission-daemon; then
+    echo ""
+    exit 1
+  fi
+
+  case "$BLOCK" in
+    1)
+      # Click action - open torrent client
+      if __cmd_exists transmission-remote-cli && __has_display && ! __is_remote; then
+        __myterminal transmission-remote-cli
+        exitCode=$?
+      elif __cmd_exists transmission-remote-cli; then
+        transmission-remote-cli
+        exitCode=$?
+      else
+        transmission-remote "$SERVER" -l
+        exitCode=$?
+      fi
+      ;;
+    list)
+      # Show torrent list
+      local resp
+      resp="$(transmission-remote "$SERVER" -l 2>/dev/null | grep -Ev ' ID |Sum:' || true)"
+      if [ -n "$resp" ]; then
+        echo "$resp" | sed 's|^     ||g'
+      else
+        return 1
+      fi
+      ;;
+    *)
+      # Default - show status summary
+      local resp
+      resp="$(__status "$SERVER" 2>/dev/null)"
+      if [ -z "$resp" ]; then
+        echo ''
+        exitCode=1
+      else
+        printf '%s\n' "$resp"
+        exitCode=0
+      fi
+      ;;
+  esac
+
+  return "$exitCode"
 }
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-# execute function
+# Execute
 main "$@"
-# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 exit $?
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # end

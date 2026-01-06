@@ -249,9 +249,23 @@ __run_post_install() {
   fi
   if [ -n "$DESKTOP_SESSION" ]; then
     if netstatg transmiss | grep -q 9091; then
-      __cmd_exists transmission-remote-gtk && __silent_start transmission-remote-gtk -m || notifications "transmission" "Running on http://${HOSTNAME:-localhost}:9091"
+      if __cmd_exists transmission-remote-gtk; then
+        # Try to start minimized - check if -m flag is supported first
+        if transmission-remote-gtk --help 2>&1 | grep -qE '\-m[,[:space:]]|--minimized'; then
+          __silent_start transmission-remote-gtk -m
+        else
+          __silent_start transmission-remote-gtk
+        fi
+      else
+        notifications "transmission" "Running on http://${HOSTNAME:-localhost}:9091"
+      fi
     elif __cmd_exists transmission-gtk; then
-      __silent_start transmission-gtk -m
+      # transmission-gtk typically supports --minimized
+      if transmission-gtk --help 2>&1 | grep -qE '\-m[,[:space:]]|--minimized'; then
+        __silent_start transmission-gtk -m
+      else
+        __silent_start transmission-gtk
+      fi
     fi
   fi
   return $getRunStatus

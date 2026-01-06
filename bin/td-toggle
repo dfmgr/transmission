@@ -1,14 +1,6 @@
 #!/usr/bin/env bash
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-PROG="td-toggle"
-USER="${SUDO_USER:-${USER}}"
-HOME="${USER_HOME:-${HOME}}"
-SRC_DIR="${BASH_SOURCE%/*}"
-# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-#set opts
-
-# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-##@Version       : 031520212024-git
+##@Version       : 202501060000-git
 # @Author        : Jason Hempstead
 # @Contact       : jason@casjaysdev.pro
 # @License       : WTFPL
@@ -16,76 +8,216 @@ SRC_DIR="${BASH_SOURCE%/*}"
 # @Copyright     : Copyright: (c) 2021 Jason Hempstead, CasjaysDev
 # @Created       : Monday, Mar 15, 2021 20:24 EDT
 # @File          : td-toggle
-# @Description   : If transmission-daemon is running, will ask to kill, else will ask to start.
+# @Description   : Toggle transmission-daemon on/off
+# @Changelog     : Refactored for self-contained operation
 # @TODO          :
 # @Other         :
 # @Resource      :
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-# Main function file
-if [ -f "$SRC_DIR/functions.bash" ]; then
-  FUNCTIONS_DIR="$SRC_DIR"
-  . "$FUNCTIONS_DIR/functions.bash"
-elif [ -f "$HOME/.local/bin/functions.bash" ]; then
-  FUNCTIONS_DIR="$HOME/.local/bin"
-  . "$FUNCTIONS_DIR/functions.bash"
-else
-  printf "\t\t\033[0;31m%s \033[0m\n" "Couldn't source the functions file from $FUNCTIONS_DIR"
-  return 1
-fi
+# Script variables
+PROG="td-toggle"
+VERSION="202501060000-git"
+USER="${SUDO_USER:-${USER}}"
+HOME="${USER_HOME:-${HOME}}"
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-# helper function
-__version() { app_version; }
+# Environment Detection
+__get_os() {
+  case "$(uname -s)" in
+    Linux*) echo "linux" ;;
+    Darwin*) echo "mac" ;;
+    *BSD*) echo "bsd" ;;
+    MINGW*|MSYS*|CYGWIN*) echo "windows" ;;
+    *) echo "unknown" ;;
+  esac
+}
+
+__is_remote() {
+  [ -n "${SSH_CLIENT:-}" ] || [ -n "${SSH_TTY:-}" ] || [ -n "${SSH_CONNECTION:-}" ]
+}
+
+__has_display() {
+  [ -n "${DISPLAY:-}" ] || [ -n "${WAYLAND_DISPLAY:-}" ]
+}
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Core helper functions
+__cmd_exists() { command -v "$1" >/dev/null 2>&1; }
+
+__is_running() {
+  local proc="$1"
+  case "$(__get_os)" in
+    mac) pgrep -x "$proc" >/dev/null 2>&1 ;;
+    windows) tasklist 2>/dev/null | grep -qi "$proc" ;;
+    *) pgrep -x "$proc" >/dev/null 2>&1 || pgrep -f "$proc" >/dev/null 2>&1 ;;
+  esac
+}
+
+__printf_color() {
+  local color="${2:-0}"
+  printf "\033[0;%sm%s\033[0m\n" "$color" "$1"
+}
+__printf_red() { __printf_color "$1" "31"; }
+__printf_green() { __printf_color "$1" "32"; }
+__printf_yellow() { __printf_color "$1" "33"; }
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Smart notifications
+__notifications() {
+  local title="$1" msg="$2"
+
+  # Remote/no display - just print to stderr
+  if __is_remote || ! __has_display; then
+    printf "[%s] %s\n" "$title" "$msg" >&2
+    return 0
+  fi
+
+  # GUI notifications based on OS
+  case "$(__get_os)" in
+    mac)
+      osascript -e "display notification \"$msg\" with title \"$title\"" 2>/dev/null && return 0
+      ;;
+    linux|bsd)
+      if __cmd_exists notify-send; then
+        notify-send "$title" "$msg" 2>/dev/null && return 0
+      fi
+      ;;
+    windows)
+      if __cmd_exists powershell.exe; then
+        powershell.exe -Command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.MessageBox]::Show('$msg', '$title')" 2>/dev/null && return 0
+      fi
+      ;;
+  esac
+
+  # Fallback
+  printf "[%s] %s\n" "$title" "$msg" >&2
+}
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Smart confirmation dialog
+__ask_confirm() {
+  local prompt="${1:-Continue?}"
+  local answer
+
+  # Remote/no display - use terminal
+  if __is_remote || ! __has_display; then
+    read -rp "$prompt [y/N] " answer
+    [[ "$answer" =~ ^[Yy] ]]
+    return $?
+  fi
+
+  # GUI dialogs based on available tools (in preference order)
+  if __cmd_exists zenity; then
+    zenity --question --text="$prompt" --title="Transmission" 2>/dev/null
+    return $?
+  elif __cmd_exists yad; then
+    yad --question --text="$prompt" --title="Transmission" 2>/dev/null
+    return $?
+  elif __cmd_exists kdialog; then
+    kdialog --yesno "$prompt" --title "Transmission" 2>/dev/null
+    return $?
+  elif __cmd_exists dmenu; then
+    answer=$(printf "Yes\nNo" | dmenu -p "$prompt" 2>/dev/null)
+    [[ "$answer" == "Yes" ]]
+    return $?
+  elif __cmd_exists rofi; then
+    answer=$(printf "Yes\nNo" | rofi -dmenu -p "$prompt" 2>/dev/null)
+    [[ "$answer" == "Yes" ]]
+    return $?
+  elif __cmd_exists osascript; then
+    # macOS
+    osascript -e "display dialog \"$prompt\" buttons {\"No\", \"Yes\"} default button \"Yes\"" 2>/dev/null | grep -q "Yes"
+    return $?
+  fi
+
+  # Fallback to terminal
+  read -rp "$prompt [y/N] " answer
+  [[ "$answer" =~ ^[Yy] ]]
+}
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Version and help
+__version() { echo "$PROG $VERSION"; }
+
 __help() {
-  app_help "Usage: td-toggle  -  td-toggle --version" \
-    "-v, --version          -  display version" \
-    "-h, --help             -  display help"
+  cat <<EOF
+$PROG $VERSION - Toggle transmission-daemon on/off
+
+Usage: $PROG [options]
+
+Options:
+  -v, --version    Show version
+  -h, --help       Show this help
+  -y, --yes        Skip confirmation prompt
+
+Description:
+  If transmission-daemon is running, prompts to kill it.
+  If not running, prompts to start it.
+EOF
 }
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # Main function
 main() {
-  # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  # options
-  case $1 in
-  -v | --version) __version ;;
-  -h | --help) __help ;;
-  esac
-  # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  # Required app check
-  cmd_exists --error bash || exit 1
-  # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  export SEND_NOTIFY=no
-  # begin main app
+  local exitCode=0
+  local skip_confirm=false
   local SERVER="${TORRENT_SERVER:-localhost}:9091"
-  if [ -f "$(command -v transmission-remote)" ] || [ -f "$(command -v transmission-remote-cli)" ]; then
-    if pgrep -x transmission-da >/dev/null; then
-      if ask_confirm "Kill transmission-daemon?"; then
-        killall transmission-da &&
-          notifications "Torrents" "transmission-daemon killed."
+
+  # Parse options
+  case "${1:-}" in
+    -v|--version) __version; exit 0 ;;
+    -h|--help) __help; exit 0 ;;
+    -y|--yes) skip_confirm=true ;;
+  esac
+
+  # Check for transmission-remote
+  if ! __cmd_exists transmission-remote && ! __cmd_exists transmission-remote-cli; then
+    __printf_red "Error: transmission-remote not found"
+    __printf_yellow "Install transmission-cli"
+    exit 1
+  fi
+
+  # Check daemon status and toggle
+  if __is_running transmission-daemon; then
+    # Daemon is running - offer to kill
+    if $skip_confirm || __ask_confirm "Kill transmission-daemon?"; then
+      if killall transmission-daemon 2>/dev/null || pkill -x transmission-daemon 2>/dev/null; then
+        __notifications "Torrents" "transmission-daemon stopped"
+        __printf_green "transmission-daemon stopped"
       else
-        notifications "Torrents" "User cancelled."
-      fi
-    else
-      if ask_confirm "Start transmission daemon?"; then
-        transmission-daemon && notifications "Torrents" "transmission-daemon started."
-      else
-        notifications "Torrents" "User cancelled."
+        __notifications "Torrents" "Failed to stop daemon"
+        __printf_red "Failed to stop transmission-daemon"
         exitCode=1
       fi
-    fi
-    sleep 3
-  else
-    if eval mytorrents; then
-      exitCode=0
     else
-      exitCode=1
+      __notifications "Torrents" "Cancelled"
+      __printf_yellow "Cancelled"
+    fi
+  else
+    # Daemon not running - offer to start
+    if $skip_confirm || __ask_confirm "Start transmission-daemon?"; then
+      if __cmd_exists transmission-daemon; then
+        transmission-daemon &
+        disown 2>/dev/null || true
+        sleep 2
+        if __is_running transmission-daemon; then
+          __notifications "Torrents" "transmission-daemon started"
+          __printf_green "transmission-daemon started"
+        else
+          __notifications "Torrents" "Failed to start daemon"
+          __printf_red "Failed to start transmission-daemon"
+          exitCode=1
+        fi
+      else
+        __printf_red "Error: transmission-daemon not found"
+        exitCode=1
+      fi
+    else
+      __notifications "Torrents" "Cancelled"
+      __printf_yellow "Cancelled"
     fi
   fi
-  return "${exitCode:-$?}"
+
+  sleep 1
+  return "$exitCode"
 }
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-# execute function
+# Execute
 main "$@"
-# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 exit $?
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # end

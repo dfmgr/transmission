@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-##@Version       : 202108010016-git
+##@Version       : 202501060000-git
 # @Author        : Jason Hempstead
 # @Contact       : jason@casjaysdev.pro
 # @License       : LICENSE.md
@@ -8,351 +8,357 @@
 # @Copyright     : Copyright: (c) 2021 Jason Hempstead, Casjays Developments
 # @Created       : Friday, Dec 31, 2021 15:41 EST
 # @File          : trans-blocklist
-# @Description   : Download or update the blocklist
+# @Description   : Download or update transmission blocklists
+# @Changelog     : Refactored for self-contained operation
 # @TODO          :
 # @Other         :
 # @Resource      :
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-trans-blocklist_main() {
-  PROG="$(basename "$0" 2>/dev/null)"
-  VERSION="202108010016-git"
-  RUN_USER="${SUDO_USER:-${USER}}"
-  USER="${SUDO_USER:-${USER}}"
-  HOME="${USER_HOME:-${HOME}}"
-  SRC_DIR="${BASH_SOURCE%/*}"
-  # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  # Set bash options
-  if [[ "$1" == "--debug" ]]; then shift 1 && set -xo pipefail && export SCRIPT_OPTS="--debug" && export _DEBUG="on"; fi
+# Script variables
+PROG="$(basename "$0" 2>/dev/null)"
+VERSION="202501060000-git"
+USER="${SUDO_USER:-${USER}}"
+HOME="${USER_HOME:-${HOME}}"
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Environment Detection
+__get_os() {
+  case "$(uname -s)" in
+    Linux*) echo "linux" ;;
+    Darwin*) echo "mac" ;;
+    *BSD*) echo "bsd" ;;
+    MINGW*|MSYS*|CYGWIN*) echo "windows" ;;
+    *) echo "unknown" ;;
+  esac
+}
 
-  # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  # Main function file
-  if [ -f "$SRC_DIR/functions.bash" ]; then
-    local FUNCTIONS_DIR="$SRC_DIR"
-    . "$FUNCTIONS_DIR/functions.bash"
-  elif [ -f "$HOME/.local/bin/functions.bash" ]; then
-    local FUNCTIONS_DIR="$HOME/.local/bin"
-    . "$FUNCTIONS_DIR/functions.bash"
-  else
-    printf "\t\t\033[0;31m%s \033[0m\n" "Couldn't source the functions file from ${FUNCTIONS_DIR:-$SRC_DIR}"
-    return 1
+__is_remote() {
+  [ -n "${SSH_CLIENT:-}" ] || [ -n "${SSH_TTY:-}" ] || [ -n "${SSH_CONNECTION:-}" ]
+}
+
+__has_display() {
+  [ -n "${DISPLAY:-}" ] || [ -n "${WAYLAND_DISPLAY:-}" ]
+}
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Core helper functions
+__cmd_exists() { command -v "$1" >/dev/null 2>&1; }
+
+__printf_color() {
+  local color="${2:-0}"
+  printf "\033[0;%sm%s\033[0m\n" "$color" "$1"
+}
+__printf_red() { __printf_color "$1" "31"; }
+__printf_green() { __printf_color "$1" "32"; }
+__printf_yellow() { __printf_color "$1" "33"; }
+__printf_blue() { __printf_color "$1" "34"; }
+__printf_cyan() { __printf_color "$1" "36"; }
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Network check
+__am_i_online() {
+  ping -c1 -W2 1.1.1.1 >/dev/null 2>&1 && return 0
+  ping -c1 -W2 8.8.8.8 >/dev/null 2>&1 && return 0
+  curl -sf --max-time 3 https://1.1.1.1 >/dev/null 2>&1 && return 0
+  return 1
+}
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Smart notifications
+__notifications() {
+  local title="$1" msg="$2"
+
+  if __is_remote || ! __has_display; then
+    printf "[%s] %s\n" "$title" "$msg" >&2
+    return 0
   fi
-  # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  # helper functions - See github.com/dfmgr/misc/bin/functions.bash
-  __version() { app_version; }
-  # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  __help() {
-    app_help "4" "Usage: trans-blocklist  " \
-      "--options                              -  Show all options" \
-      "-c, --config                           -  Create config file" \
-      "-v, --version                          -  Display version" \
-      "-h, --help                             -  Display help"
 
-    exit $?
-  }
-  # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  __list_options() {
-    printf_custom "$1" "$2: $(echo ${3:-$ARRAY} | __sed 's|:||g;s|'$4'| '$5'|g')" 2>/dev/null
-  }
-  # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  __gen_config() {
-    printf_green "Generating the config file in"
-    printf_green "$TRANS_BLOCKLIST_CONFIG_DIR/$TRANS_BLOCKLIST_CONFIG_FILE"
-    [ -d "$TRANS_BLOCKLIST_CONFIG_DIR" ] || mkdir -p "$TRANS_BLOCKLIST_CONFIG_DIR"
-    [ -d "$TRANS_BLOCKLIST_CONFIG_BACKUP_DIR" ] || mkdir -p "$TRANS_BLOCKLIST_CONFIG_BACKUP_DIR"
-    [ -f "$TRANS_BLOCKLIST_CONFIG_DIR/$TRANS_BLOCKLIST_CONFIG_FILE" ] &&
-      cp -Rf "$TRANS_BLOCKLIST_CONFIG_DIR/$TRANS_BLOCKLIST_CONFIG_FILE" "$TRANS_BLOCKLIST_CONFIG_BACKUP_DIR/$TRANS_BLOCKLIST_CONFIG_FILE.$$"
-    cat <<EOF >"$TRANS_BLOCKLIST_CONFIG_DIR/$TRANS_BLOCKLIST_CONFIG_FILE"
+  case "$(__get_os)" in
+    mac)
+      osascript -e "display notification \"$msg\" with title \"$title\"" 2>/dev/null && return 0
+      ;;
+    linux|bsd)
+      if __cmd_exists notify-send; then
+        notify-send "$title" "$msg" 2>/dev/null && return 0
+      fi
+      ;;
+  esac
+
+  printf "[%s] %s\n" "$title" "$msg" >&2
+}
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Array helper
+in_array() {
+  local needle="$1" i
+  local -n arrref="$2"
+  for ((i = 0; i < ${#arrref[@]}; i++)); do
+    [[ "${arrref[i]}" == "${needle}" ]] && return 0
+  done
+  return 1
+}
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Version and help
+__version() { echo "$PROG $VERSION"; }
+
+__help() {
+  cat <<EOF
+$PROG $VERSION - Transmission blocklist manager
+
+Usage: $PROG [options] [command]
+
+Options:
+  --version        Show version
+  --help           Show this help
+  --config         Generate config file
+  --dir DIR        Output directory
+
+Commands:
+  download         Download and create blocklist
+  update           Same as download
+  create           Same as download
+  all              Show all available lists
+  free             Show free lists only
+  paid             Show paid lists only
+  (none)           Show all list details
+
+Description:
+  Downloads free blocklists from iblocklist.com and other sources,
+  combines them, and creates a compressed blocklist.gz file.
+EOF
+}
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Config generation
+__gen_config() {
+  local config_dir="$HOME/.config/misc/settings/trans-blocklist"
+  local config_file="$config_dir/settings.conf"
+
+  __printf_green "Generating config file in $config_file"
+
+  mkdir -p "$config_dir"
+  cat <<EOF >"$config_file"
 # Settings for trans-blocklist
 
 # Notification settings
-TRANS_BLOCKLIST_GOOD_MESSAGE="${TRANS_BLOCKLIST_GOOD_MESSAGE:-Everything Went OK}"
-TRANS_BLOCKLIST_ERROR_MESSAGE="${TRANS_BLOCKLIST_ERROR_MESSAGE:-Well something seems to have gone wrong}"
-TRANS_BLOCKLIST_NOTIFY_ENABLED="${TRANS_BLOCKLIST_NOTIFY_ENABLED:-yes}"
-TRANS_BLOCKLIST_NOTIFY_CLIENT_NAME="${NOTIFY_CLIENT_NAME:-$PROG}"
-TRANS_BLOCKLIST_NOTIFY_CLIENT_ICON="${NOTIFY_CLIENT_ICON:-$TRANS_BLOCKLIST_NOTIFY_CLIENT_ICON}"
+TRANS_BLOCKLIST_NOTIFY_ENABLED="yes"
 
-# Colorization settings
-TRANS_BLOCKLIST_OUTPUT_COLOR="${TRANS_BLOCKLIST_OUTPUT_COLOR:-5}"
-TRANS_BLOCKLIST_OUTPUT_COLOR_GOOD="${TRANS_BLOCKLIST_OUTPUT_COLOR_GOOD:-2}"
-TRANS_BLOCKLIST_OUTPUT_COLOR_ERROR="${TRANS_BLOCKLIST_OUTPUT_COLOR_ERROR:-1}"
-
+# Output settings
+TRANS_BLOCKLIST_OUTPUT_DIR="\$PWD/transmission"
 EOF
-    if [ -f "$TRANS_BLOCKLIST_CONFIG_DIR/$TRANS_BLOCKLIST_CONFIG_FILE" ]; then
-      [[ "$INIT_CONFIG" = "TRUE" ]] || printf_green "Your config file for $APPNAME has been created"
-      true
-    else
-      printf_red "Failed to create the config file"
-      false
-    fi
-  }
-  # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  # Additional functions
-  print_results() {
-    for ((i = 0; i < ${#ids[@]}; i++)); do
-      in_array "${ids[i]}" "frees" && free="yes" || free="no"
-      printf "%-${name_max}s   %-${id_max}s   %-${url_max}s   %-4s\n" "${names[i]}" "${ids[i]}" "${urls[i]}" "${free}"
-    done
-  }
-  # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  show_free() {
-    for ((i = 0; i < ${#ids[@]}; i++)); do
-      in_array "${ids[i]}" "frees" && echo -n "[\"${names[i]}\"]=\"${ids[i]}\" "
-    done
-  }
-  # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  show_paid() {
-    for ((i = 0; i < ${#ids[@]}; i++)); do
-      in_array "${ids[i]}" "frees" || echo -n "[\"${names[i]}\"]=\"${ids[i]}\" "
-    done
-  }
-  # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  show_all() {
-    for ((i = 0; i < ${#ids[@]}; i++)); do
-      echo -n "[\"${names[i]}\"]=\"${ids[i]}\" "
-    done
-  }
-  # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  init() {
-    echo -e "\e[1mScraping lists from '${lists_url}'...\e[0m"
-    ids=()
-    names=()
-    urls=()
-    frees=()
-    id_max=0
-    name_max=0
-    url_max=0
-    while read -r line; do
-      if [[ "${line}" =~ ${re_id_name} ]]; then
-        id="${BASH_REMATCH[1]}"
-        ids+=("${id}")
-        name="${BASH_REMATCH[2]}"
-        names+=("${name}")
-        printf -v url "${download_url}" "${id}"
-        urls+=("${url}")
-        ((${#id} > ${id_max})) && id_max=${#id}
-        ((${#name} > ${name_max})) && name_max=${#name}
-        ((${#url} > ${url_max})) && url_max=${#url}
-      elif [[ "${line}" =~ ${re_free} ]]; then
-        id="${BASH_REMATCH[1]}"
-        frees+=("${id}")
-      fi
-    done < <(curl --silent --show-error --user-agent "${user_agent}" "${lists_url}")
-    echo "Found ${#ids[@]} lists"
-    echo
-  }
-  # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  in_array() {
-    local needle="$1" i
-    local -n arrref="$2"
-    for ((i = 0; i < ${#arrref[@]}; i++)); do
-      [[ "${arrref[i]}" == "${needle}" ]] && return 0
-    done
-    return 1
-  }
-  # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  # Defaults
-  local exitCode=
-  # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  # Application Folders
-  local TRANS_BLOCKLIST_LOG_DIR="${TRANS_BLOCKLIST_LOG_DIR:-$HOME/.local/log/trans-blocklist}"
-  local TRANS_BLOCKLIST_CACHE_DIR="${TRANS_BLOCKLIST_CACHE_DIR:-$HOME/.cache/trans-blocklist}"
-  local TRANS_BLOCKLIST_CONFIG_DIR="${TRANS_BLOCKLIST_CONFIG_DIR:-$HOME/.config/misc/settings/trans-blocklist}"
-  local TRANS_BLOCKLIST_OPTIONS_DIR="${TRANS_BLOCKLIST_OPTIONS_DIR:-$HOME/.local/share/misc/trans-blocklist/options}"
-  local TRANS_BLOCKLIST_CONFIG_BACKUP_DIR="${TRANS_BLOCKLIST_CONFIG_BACKUP_DIR:-$HOME/.local/share/misc/trans-blocklist/backups}"
-  local TRANS_BLOCKLIST_TEMP_DIR="${TRANS_BLOCKLIST_TEMP_DIR:-$HOME/.local/tmp/system_scripts/trans-blocklist}"
-  local TRANS_BLOCKLIST_CONFIG_FILE="${TRANS_BLOCKLIST_CONFIG_FILE:-settings.conf}"
-  local TRANS_BLOCKLIST_GOOD_MESSAGE="${TRANS_BLOCKLIST_GOOD_MESSAGE:-Everything Went OK}"
-  local TRANS_BLOCKLIST_ERROR_MESSAGE="${TRANS_BLOCKLIST_ERROR_MESSAGE:-Well something seems to have gone wrong}"
-  local TRANS_BLOCKLIST_NOTIFY_ENABLED="${TRANS_BLOCKLIST_NOTIFY_ENABLED:-yes}"
-  local TRANS_BLOCKLIST_NOTIFY_CLIENT_NAME="${NOTIFY_CLIENT_NAME:-$APPNAME}"
-  local TRANS_BLOCKLIST_NOTIFY_CLIENT_ICON="${NOTIFY_CLIENT_ICON:-$TRANS_BLOCKLIST_NOTIFY_CLIENT_ICON}"
-  local TRANS_BLOCKLIST_OUTPUT_COLOR="${TRANS_BLOCKLIST_OUTPUT_COLOR:-5}"
-  local TRANS_BLOCKLIST_OUTPUT_COLOR_GOOD="${TRANS_BLOCKLIST_OUTPUT_COLOR_GOOD:-2}"
-  local TRANS_BLOCKLIST_OUTPUT_COLOR_ERROR="${TRANS_BLOCKLIST_OUTPUT_COLOR_ERROR:-1}"
-  # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  # Enviroment overrides
-  ALL_LISTS=()
-  FREE_LISTS=()
-  NON_FREE_LISTS=()
 
-  # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  # Generate config files
-  [ -f "$TRANS_BLOCKLIST_CONFIG_DIR/$TRANS_BLOCKLIST_CONFIG_FILE" ] || [[ "$*" = *config ]] || INIT_CONFIG="${INIT_CONFIG:-TRUE}" __gen_config ${SETARGS:-$@}
-  # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  # Import config
-  [ -f "$TRANS_BLOCKLIST_CONFIG_DIR/$TRANS_BLOCKLIST_CONFIG_FILE" ] && . "$TRANS_BLOCKLIST_CONFIG_DIR/$TRANS_BLOCKLIST_CONFIG_FILE"
-  # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  # Ensure Directories exist
-  [ -d "$TRANS_BLOCKLIST_LOG_DIR" ] || mkdir -p "$TRANS_BLOCKLIST_LOG_DIR" &>/dev/null
-  [ -d "$TRANS_BLOCKLIST_TEMP_DIR" ] || mkdir -p "$TRANS_BLOCKLIST_TEMP_DIR" &>/dev/null
-  [ -d "$TRANS_BLOCKLIST_CACHE_DIR" ] || mkdir -p "$TRANS_BLOCKLIST_CACHE_DIR" &>/dev/null
-  local TRANS_BLOCKLIST_TEMP_FILE="${TRANS_BLOCKLIST_TEMP_FILE:-$(mktemp $TRANS_BLOCKLIST_TEMP_DIR/XXXXXX 2>/dev/null)}"
-  # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  # Setup trap to remove temp file
-  trap 'exitCode=${exitCode:-$?};[ -n "$TRANS_BLOCKLIST_TEMP_FILE" ] && [ -f "$TRANS_BLOCKLIST_TEMP_FILE" ] && rm -Rf "$TRANS_BLOCKLIST_TEMP_FILE" &>/dev/null' EXIT
-  # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  # Setup notification function
-  if [ "$TRANS_BLOCKLIST_NOTIFY_ENABLED" = "yes" ]; then
-    __notifications() {
-      export NOTIFY_GOOD_MESSAGE="${TRANS_BLOCKLIST_GOOD_MESSAGE}"
-      export NOTIFY_ERROR_MESSAGE="${TRANS_BLOCKLIST_ERROR_MESSAGE}"
-      export NOTIFY_CLIENT_NAME="${TRANS_BLOCKLIST_NOTIFY_CLIENT_NAME}"
-      export NOTIFY_CLIENT_ICON="${TRANS_BLOCKLIST_NOTIFY_CLIENT_ICON}"
-      notifications "$@" && exitCode=0 || exitCode=1
-      unset NOTIFY_CLIENT_NAME NOTIFY_CLIENT_ICON NOTIFY_GOOD_MESSAGE NOTIFY_ERROR_MESSAGE
-      return ${exitCode:-$?}
-    }
+  if [ -f "$config_file" ]; then
+    __printf_green "Config file created"
   else
-    __notifications() { false; }
+    __printf_red "Failed to create config file"
+    return 1
   fi
-  # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  # Show warn message if variables are missing
-
-  # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  # Argument/Option settings
-  local SETARGS="$*"
-  local SHORTOPTS=""
-  local LONGOPTS="options,config,version,help,dir:"
-  local ARRAY=""
-  local setopts
-  # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  # Setup application options
-  setopts=$(getopt -o "$SHORTOPTS" --long "$LONGOPTS" -a -n "$(basename "$0" 2>/dev/null)" -- "$@" 2>/dev/null)
-  eval set -- "${setopts[@]}" 2>/dev/null
-  while :; do
-    case "$1" in
-    --options)
-      shift 1
-      [ -n "$1" ] || printf_blue "Current options for ${PROG:-$APPNAME}"
-      [ -z "$SHORTOPTS" ] || __list_options "5" "Short Options" "-$SHORTOPTS" ',' '-'
-      [ -z "$LONGOPTS" ] || __list_options "5" "Long Options" "--$LONGOPTS" ',' '--'
-      [ -z "$ARRAY" ] || __list_options "5" "Base Options" "$ARRAY" ',' ''
-      exit $?
-      ;;
-    --version)
-      shift 1
-      __version
-      exit $?
-      ;;
-    --help)
-      shift 1
-      __help
-      exit $?
-      ;;
-    --config)
-      shift 1
-      __gen_config
-      exit $?
-      ;;
-    --dir)
-      TRANS_BLOCKLIST_CWD="$2"
-      shift 2
-      ;;
-    --)
-      shift 1
-      break
-      ;;
-    esac
-  done
-  #set -- "$SETARGS"
-  # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  # Actions based on env
-
-  # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  # Check for required applications/Network check
-  cmd_exists --error bash || exit 1 # exit 1 if not found
-  am_i_online --error || exit 1     # exit 1 if no internet
-  # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  # APP Variables overrides
-  out_name="blocklist.gz"
-  out_dir="$PWD/transmission"
-  user_agent="Mozilla/5.0 (X11; Linux x86_64; rv:75.0) Gecko/20100101 Firefox/75.0"
-  lists_url="https://www.iblocklist.com/lists.php"
-  download_url="https://list.iblocklist.com/?list=%s&fileformat=p2p&archiveformat=gz"
-  re_id_name="<a href='/list\?list=(.+)'>(.+)</a>"
-  re_free="type='text' id='(.+)' readonly='readonly'"
-  init
-  # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  # begin main app
-  case "$1" in
-  download | update | create)
-    [ -d "$out_dir" ] || mkdir -p "$out_dir"
-    [ -f "$out_dir/$out_name" ] && rm -Rf "$out_dir/$out_name"
-    [ -d "$TRANS_BLOCKLIST_TEMP_DIR" ] && rm -Rf "$TRANS_BLOCKLIST_TEMP_DIR"/* || mkdir -p "$TRANS_BLOCKLIST_TEMP_DIR"
-    get_free_urls=$(print_results | grep 'yes' | awk '{print $3}' | grep 'http')
-    for free_url in $get_free_urls; do
-      ret_name="$(echo "${free_url}" | awk -F'list=' '{print $2}' | sed 's|&.*||g')"
-      echo "downloading ${free_url} to $TRANS_BLOCKLIST_TEMP_DIR/${ret_name}.gz"
-      curl -q -LSs "${free_url}" -o "$TRANS_BLOCKLIST_TEMP_DIR/${ret_name}.gz" 2>/dev/null
-      if [ -s "$TRANS_BLOCKLIST_TEMP_DIR/${ret_name}.gz" ]; then
-        gunzip "$TRANS_BLOCKLIST_TEMP_DIR/${ret_name}.gz"
-        cat "$TRANS_BLOCKLIST_TEMP_DIR/${ret_name}" | grep -v -E '^#' >>"$TRANS_BLOCKLIST_TEMP_DIR/blacklist.txt"
-        rm -f "$TRANS_BLOCKLIST_TEMP_DIR/${ret_name}"
-      fi
-    done
-    curl -A "Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:47.0) Gecko/20100101 Firefox/47.0" -s https://mirror.codebucket.de/transmission/blocklist.p2p >>$TRANS_BLOCKLIST_TEMP_DIR/blacklist.txt
-    curl -A "Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:47.0) Gecko/20100101 Firefox/47.0" -s https://www.wael.name/wael.list.txt | sed "/^#.*/d" | grep -Ev "^[0-9][0-9][0-9]\.[0-9][0-9][0-9].*" >>$TRANS_BLOCKLIST_TEMP_DIR/blacklist.txt
-    sort --unique $TRANS_BLOCKLIST_TEMP_DIR/blacklist.txt >$TRANS_BLOCKLIST_TEMP_DIR/blacklist.txt.tmp
-    mv -f $TRANS_BLOCKLIST_TEMP_DIR/blacklist.txt.tmp $TRANS_BLOCKLIST_TEMP_DIR/blacklist.txt
-    grep -v -E '^#' "$TRANS_BLOCKLIST_TEMP_DIR/blacklist.txt" | gzip - >"$out_dir/$out_name"
-    check=$(du -s "$out_dir/$out_name" | awk '{print $1}')
-    if [ -f "$out_dir/$out_name" ]; then
-      echo "Created $out_dir/$out_name"
-      rm -Rf "$TRANS_BLOCKLIST_TEMP_DIR"/*
-    else
-      echo "$out_dir/$out_name not created"
-    fi
-    ;;
-
-  all)
-    show_all
-    echo
-    exit
-    ;;
-
-  free)
-    show_free
-    echo
-    exit
-    ;;
-
-  paid)
-    show_paid
-    echo
-    exit
-    ;;
-
-  *)
-    # Print results
-    echo -e "\e[1mList details:\e[0m"
-    printf "%-${name_max}s   %-${id_max}s   %-${url_max}s   %-4s\n" "Name" "ID" "URL" "Free"
-    print_results
-    echo
-    echo -e "\e[1mAll lists:\e[0m"
-    echo -n "declare -A IBL_LISTS=("
-    show_all
-    echo -e "\b)"
-    echo
-    echo -e "\e[1mFree lists:\e[0m"
-    echo -n "declare -A IBL_LISTS=("
-    show_free
-    echo -e "\b)"
-    echo
-    echo -e "\e[1mPaid lists:\e[0m"
-    echo -n "declare -A IBL_LISTS=("
-    show_paid
-    echo -e "\b)"
-    ;;
-  esac
-  # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  # lets exit with code
-  return ${exitCode:-$?}
 }
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-# execute function
-trans-blocklist_main "$@"
+# Blocklist functions
+print_results() {
+  for ((i = 0; i < ${#ids[@]}; i++)); do
+    in_array "${ids[i]}" "frees" && free="yes" || free="no"
+    printf "%-${name_max}s   %-${id_max}s   %-${url_max}s   %-4s\n" "${names[i]}" "${ids[i]}" "${urls[i]}" "${free}"
+  done
+}
+
+show_free() {
+  for ((i = 0; i < ${#ids[@]}; i++)); do
+    in_array "${ids[i]}" "frees" && echo -n "[\"${names[i]}\"]=\"${ids[i]}\" "
+  done
+}
+
+show_paid() {
+  for ((i = 0; i < ${#ids[@]}; i++)); do
+    in_array "${ids[i]}" "frees" || echo -n "[\"${names[i]}\"]=\"${ids[i]}\" "
+  done
+}
+
+show_all() {
+  for ((i = 0; i < ${#ids[@]}; i++)); do
+    echo -n "[\"${names[i]}\"]=\"${ids[i]}\" "
+  done
+}
+
+init_lists() {
+  echo -e "\033[1mScraping lists from '${lists_url}'...\033[0m"
+  ids=()
+  names=()
+  urls=()
+  frees=()
+  id_max=0
+  name_max=0
+  url_max=0
+
+  while read -r line; do
+    if [[ "${line}" =~ ${re_id_name} ]]; then
+      id="${BASH_REMATCH[1]}"
+      ids+=("${id}")
+      name="${BASH_REMATCH[2]}"
+      names+=("${name}")
+      printf -v url "${download_url}" "${id}"
+      urls+=("${url}")
+      ((${#id} > ${id_max})) && id_max=${#id}
+      ((${#name} > ${name_max})) && name_max=${#name}
+      ((${#url} > ${url_max})) && url_max=${#url}
+    elif [[ "${line}" =~ ${re_free} ]]; then
+      id="${BASH_REMATCH[1]}"
+      frees+=("${id}")
+    fi
+  done < <(curl --silent --show-error --user-agent "${user_agent}" "${lists_url}" 2>/dev/null)
+
+  echo "Found ${#ids[@]} lists"
+  echo
+}
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-# End application
+# Main function
+trans_blocklist_main() {
+  local exitCode=0
+
+  # Config directories
+  local config_dir="$HOME/.config/misc/settings/trans-blocklist"
+  local config_file="$config_dir/settings.conf"
+  local cache_dir="$HOME/.cache/trans-blocklist"
+  local temp_dir="$HOME/.local/tmp/trans-blocklist"
+
+  # Load config if exists
+  [ -f "$config_file" ] && . "$config_file"
+
+  # Ensure directories exist
+  mkdir -p "$cache_dir" "$temp_dir" 2>/dev/null
+
+  # Setup trap
+  trap 'rm -rf "$temp_dir"/* 2>/dev/null' EXIT
+
+  # Parse options
+  local out_dir="${TRANS_BLOCKLIST_OUTPUT_DIR:-$PWD/transmission}"
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --version) __version; exit 0 ;;
+      --help|-h) __help; exit 0 ;;
+      --config) __gen_config; exit $? ;;
+      --dir) out_dir="$2"; shift 2 ;;
+      --) shift; break ;;
+      -*) __printf_red "Unknown option: $1"; exit 1 ;;
+      *) break ;;
+    esac
+  done
+
+  # Check requirements
+  if ! __cmd_exists curl; then
+    __printf_red "Error: curl is required"
+    exit 1
+  fi
+
+  if ! __am_i_online; then
+    __printf_red "Error: No internet connection"
+    exit 1
+  fi
+
+  # Blocklist source settings
+  local out_name="blocklist.gz"
+  local user_agent="Mozilla/5.0 (X11; Linux x86_64; rv:75.0) Gecko/20100101 Firefox/75.0"
+  local lists_url="https://www.iblocklist.com/lists.php"
+  local download_url="https://list.iblocklist.com/?list=%s&fileformat=p2p&archiveformat=gz"
+  local re_id_name="<a href='/list\?list=(.+)'>(.+)</a>"
+  local re_free="type='text' id='(.+)' readonly='readonly'"
+
+  # Initialize list data
+  init_lists
+
+  # Execute command
+  case "${1:-}" in
+    download|update|create)
+      mkdir -p "$out_dir"
+      [ -f "$out_dir/$out_name" ] && rm -f "$out_dir/$out_name"
+      rm -rf "$temp_dir"/*
+
+      __printf_blue "Downloading free blocklists..."
+
+      # Get free list URLs
+      local get_free_urls
+      get_free_urls=$(print_results | grep 'yes' | awk '{print $3}' | grep 'http')
+
+      for free_url in $get_free_urls; do
+        local ret_name
+        ret_name="$(echo "${free_url}" | awk -F'list=' '{print $2}' | sed 's|&.*||g')"
+        echo "Downloading: ${ret_name}"
+        curl -q -LSs "${free_url}" -o "$temp_dir/${ret_name}.gz" 2>/dev/null
+
+        if [ -s "$temp_dir/${ret_name}.gz" ]; then
+          gunzip "$temp_dir/${ret_name}.gz" 2>/dev/null
+          grep -v -E '^#' "$temp_dir/${ret_name}" >>"$temp_dir/blacklist.txt" 2>/dev/null
+          rm -f "$temp_dir/${ret_name}"
+        fi
+      done
+
+      # Additional blocklist sources
+      __printf_blue "Downloading additional blocklists..."
+      curl -A "$user_agent" -s https://mirror.codebucket.de/transmission/blocklist.p2p >>"$temp_dir/blacklist.txt" 2>/dev/null
+      curl -A "$user_agent" -s https://www.wael.name/wael.list.txt | sed '/^#.*/d' | grep -Ev '^[0-9][0-9][0-9]\.[0-9][0-9][0-9].*' >>"$temp_dir/blacklist.txt" 2>/dev/null
+
+      # Sort and deduplicate
+      if [ -f "$temp_dir/blacklist.txt" ]; then
+        sort --unique "$temp_dir/blacklist.txt" >"$temp_dir/blacklist.txt.tmp"
+        mv -f "$temp_dir/blacklist.txt.tmp" "$temp_dir/blacklist.txt"
+
+        # Create compressed blocklist
+        grep -v -E '^#' "$temp_dir/blacklist.txt" | gzip - >"$out_dir/$out_name"
+        rm -rf "$temp_dir"/*
+
+        if [ -f "$out_dir/$out_name" ]; then
+          local size
+          size=$(du -h "$out_dir/$out_name" | awk '{print $1}')
+          __printf_green "Created: $out_dir/$out_name ($size)"
+          __notifications "Blocklist" "Blocklist updated: $size"
+        else
+          __printf_red "Failed to create blocklist"
+          exitCode=1
+        fi
+      else
+        __printf_red "No blocklist data downloaded"
+        exitCode=1
+      fi
+      ;;
+
+    all)
+      show_all
+      echo
+      ;;
+
+    free)
+      show_free
+      echo
+      ;;
+
+    paid)
+      show_paid
+      echo
+      ;;
+
+    *)
+      # Print results
+      echo -e "\033[1mList details:\033[0m"
+      printf "%-${name_max}s   %-${id_max}s   %-${url_max}s   %-4s\n" "Name" "ID" "URL" "Free"
+      print_results
+      echo
+      echo -e "\033[1mAll lists:\033[0m"
+      echo -n "declare -A IBL_LISTS=("
+      show_all
+      echo -e "\b)"
+      echo
+      echo -e "\033[1mFree lists:\033[0m"
+      echo -n "declare -A IBL_LISTS=("
+      show_free
+      echo -e "\b)"
+      echo
+      echo -e "\033[1mPaid lists:\033[0m"
+      echo -n "declare -A IBL_LISTS=("
+      show_paid
+      echo -e "\b)"
+      ;;
+  esac
+
+  return "$exitCode"
+}
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-# lets exit with code
-exit ${exitCode:-$?}
+# Execute
+trans_blocklist_main "$@"
+exit $?
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# end
